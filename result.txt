@@ -2887,3 +2887,9 @@ mse:0.1634, mae:0.2483, rmse:0.4042, mape:8.5040, mspe:6118391.8573, rse:0.2837,
 weather_96_96_CycleNet_custom_ftM_sl96_pl96_cycle144_mlp_seed2024  
 mse:0.1582271158695221, mae:0.20301048457622528
 
+weather_96_96_seed2024_MLP  
+mse:0.2183, mae:0.3022, rmse:0.4672, mape:6.8450, mspe:3678056.0000, rse:0.3790, corr:0.7909
+
+weather_96_96_seed2024_MLP  
+mse:0.2244, mae:0.3085, rmse:0.4737, mape:8.7418, mspe:7536266.5000, rse:0.3897, corr:0.7864
+
