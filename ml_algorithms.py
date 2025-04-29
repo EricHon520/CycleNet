@@ -272,11 +272,23 @@ def train_and_evaluate_xgb(train_x, train_y, val_x, val_y, test_x, test_y,
     print(f"Starting XGBoost model training (n_estimators={n_estimators}, learning_rate={learning_rate}, max_depth={max_depth})...")
     start_time = time.time()
     
+    # 檢查 GPU 是否可用
+    try:
+        import subprocess
+        nvidia_output = subprocess.check_output('nvidia-smi', shell=True)
+        print("NVIDIA GPU detected:")
+        print(nvidia_output.decode('utf-8').split('\n')[:5])  # 顯示前幾行資訊
+        gpu_available = True
+    except:
+        print("WARNING: NVIDIA GPU not detected or nvidia-smi command cannot be executed")
+        print("XGBoost may automatically downgrade to CPU mode")
+        gpu_available = False
+
     # Get total number of variables
     n_variables = train_y.shape[1] // pred_len
     total_models = pred_len * n_variables
     
-    print(f"需要訓練 {total_models} 個 XGBoost 子模型")
+    print(f"Need to train {total_models} XGBoost sub-models")
     models = []
     completed = 0
     
@@ -303,8 +315,8 @@ def train_and_evaluate_xgb(train_x, train_y, val_x, val_y, test_x, test_y,
             if show_progress:
                 elapsed = time.time() - start_time
                 eta = (elapsed / completed) * (total_models - completed) if completed > 0 else 0
-                print(f"訓練 XGBoost 模型: {completed}/{total_models} [時間步 {i+1}/{pred_len}, 變數 {j+1}/{n_variables}]")
-                print(f"已用時間: {elapsed:.1f}秒, 預計剩餘: {eta:.1f}秒")
+                print(f"Train XGBoost models: {completed}/{total_models} [timestep {i+1}/{pred_len}, number of variables {j+1}/{n_variables}]")
+                print(f"Elapsed time: {elapsed:.1f} seconds, estimated remaining time: {eta:.1f} seconds")
     
     # Predict on validation set
     val_pred = np.zeros((val_x.shape[0], val_y.shape[1]))
@@ -325,7 +337,7 @@ def train_and_evaluate_xgb(train_x, train_y, val_x, val_y, test_x, test_y,
     test_mae, test_mse, test_rmse = evaluate_metrics(test_pred, test_y)
     
     total_time = time.time() - start_time
-    print(f"XGBoost 模型訓練完成! 總耗時: {total_time:.2f}秒")
+    print(f"XGBoost model training completed! Total time: {total_time:.2f} seconds")
     print("XGBoost model evaluation results:")
     print(f"Validation set - MAE: {val_mae:.4f}, RMSE: {val_rmse:.4f}")
     print(f"Test set - MAE: {test_mae:.4f}, RMSE: {test_rmse:.4f}")
@@ -344,7 +356,7 @@ def train_and_evaluate_ridge(train_x, train_y, val_x, val_y, test_x, test_y,
     n_variables = train_y.shape[1] // pred_len
     total_models = pred_len * n_variables
     
-    print(f"需要訓練 {total_models} 個 Ridge 線性子模型")
+    print(f"Need to train {total_models} Ridge linear sub-models")
     models = []
     completed = 0
     
@@ -364,8 +376,8 @@ def train_and_evaluate_ridge(train_x, train_y, val_x, val_y, test_x, test_y,
             if show_progress and completed % 50 == 0:  # 每 50 個模型顯示一次進度
                 elapsed = time.time() - start_time
                 eta = (elapsed / completed) * (total_models - completed) if completed > 0 else 0
-                print(f"訓練 Ridge 模型: {completed}/{total_models} [時間步 {i+1}/{pred_len}, 變數 {j+1}/{n_variables}]")
-                print(f"已用時間: {elapsed:.1f}秒, 預計剩餘: {eta:.1f}秒")
+                print(f"Train Ridge model: {completed}/{total_models} [timestep {i+1}/{pred_len}, number of variables {j+1}/{n_variables}]")
+                print(f"Elapsed time: {elapsed:.1f} seconds, estimated remaining time: {eta:.1f} seconds")
     
     # Predict on validation set
     val_pred = np.zeros((val_x.shape[0], val_y.shape[1]))
@@ -386,7 +398,7 @@ def train_and_evaluate_ridge(train_x, train_y, val_x, val_y, test_x, test_y,
     test_mae, test_mse, test_rmse = evaluate_metrics(test_pred, test_y)
     
     total_time = time.time() - start_time
-    print(f"Ridge 模型訓練完成! 總耗時: {total_time:.2f}秒")
+    print(f"Ridge model training completed! Total time: {total_time:.2f} seconds")
     print("Ridge model evaluation results:")
     print(f"Validation set - MAE: {val_mae:.4f}, RMSE: {val_rmse:.4f}")
     print(f"Test set - MAE: {test_mae:.4f}, RMSE: {test_rmse:.4f}")
@@ -562,8 +574,8 @@ if __name__ == "__main__":
     total_models = total_pred_len * features_per_step * len(random_seed_list) * 2  # 2 types of models
     
     print(f"=" * 80)
-    print(f"總計需要訓練 {total_models} 個模型")
-    print(f"包含 {len(pred_len_list)} 種預測長度 × {features_per_step} 個變數 × 2 種模型類型 × {len(random_seed_list)} 個隨機種子")
+    print(f"A total of {total_models} models need to be trained")
+    print(f"Contains {len(pred_len_list)} prediction lengths × {features_per_step} variables × 2 model types × {len(random_seed_list)} random seeds")
     print(f"=" * 80)
     
     main_start_time = time.time()
@@ -594,8 +606,8 @@ if __name__ == "__main__":
         
         # 針對每個隨機種子運行模型
         for random_seed in random_seed_list:
-            print(f"\n處理隨機種子: {random_seed}，預測長度: {pred_len}")
-            print(f"總進度: {completed_models}/{total_models} 已完成")
+            print(f"\nProcess random seed: {random_seed}, prediction length: {pred_len}")
+            print(f"Total progress: {completed_models}/{total_models} completed")
             
             # Train and evaluate XGBoost model with GPU acceleration
             xgb_models, xgb_val_pred, xgb_test_pred, xgb_val_metrics, xgb_test_metrics = train_and_evaluate_xgb(
@@ -605,7 +617,7 @@ if __name__ == "__main__":
             )
             
             completed_models += pred_len * features_per_step
-            print(f"總進度: {completed_models}/{total_models} 已完成")
+            print(f"Total progress: {completed_models}/{total_models} completed")
             
             # Train and evaluate Ridge model (linear model - much faster)
             ridge_models, ridge_val_pred, ridge_test_pred, ridge_val_metrics, ridge_test_metrics = train_and_evaluate_ridge(
@@ -617,8 +629,8 @@ if __name__ == "__main__":
             completed_models += pred_len * features_per_step
             elapsed = time.time() - main_start_time
             eta = (elapsed / completed_models) * (total_models - completed_models) if completed_models > 0 else 0
-            print(f"總進度: {completed_models}/{total_models} 已完成")
-            print(f"總耗時: {elapsed/60:.1f}分鐘, 預計剩餘: {eta/60:.1f}分鐘")
+            print(f"Total progress: {completed_models}/{total_models} completed")
+            print(f"Total time: {elapsed/60:.1f} minutes, estimated remaining time: {eta/60:.1f} minutes")
             
             # 儲存每個隨機種子的結果
             xgb_results.append({
@@ -642,7 +654,7 @@ if __name__ == "__main__":
         
         # 計算並打印平均結果
         print(f"\n{'-'*50}")
-        print(f"預測長度 {pred_len} 在 {len(random_seed_list)} 個種子下的平均結果:")
+        print(f"Average results of prediction length {pred_len} under {len(random_seed_list)} seeds:")
         
         # XGBoost 平均結果
         xgb_avg_mae = np.mean([res['test_metrics'][0] for res in xgb_results])
@@ -652,9 +664,9 @@ if __name__ == "__main__":
         ridge_avg_mae = np.mean([res['test_metrics'][0] for res in ridge_results])
         ridge_avg_rmse = np.mean([res['test_metrics'][2] for res in ridge_results])
         
-        print("模型\t\t平均 MAE\t\t平均 RMSE")
+        print("Model\t\tAverage MAE\t\tAverage RMSE")
         print(f"XGBoost\t\t{xgb_avg_mae:.4f}\t\t{xgb_avg_rmse:.4f}")
-        print(f"Ridge回歸\t{ridge_avg_mae:.4f}\t\t{ridge_avg_rmse:.4f}")
+        print(f"Ridge Regression\t{ridge_avg_mae:.4f}\t\t{ridge_avg_rmse:.4f}")
         
         # 為平均結果繪圖
         best_xgb_idx = np.argmin([res['test_metrics'][0] for res in xgb_results])
@@ -667,7 +679,7 @@ if __name__ == "__main__":
     
     total_time = time.time() - main_start_time
     print(f"\n{'-'*50}")
-    print(f"所有模型訓練完成!")
-    print(f"總訓練時間: {total_time/60:.2f}分鐘")
-    print(f"平均每個模型訓練時間: {total_time/total_models:.4f}秒")
+    print(f"All model training is complete!")
+    print(f"Total training time: {total_time/60:.2f} minutes")
+    print(f"Average training time per model: {total_time/total_models:.4f} seconds")
     print(f"{'-'*50}")
