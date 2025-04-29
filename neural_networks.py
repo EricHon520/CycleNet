@@ -210,6 +210,47 @@ def visualize_predictions(pred, true, folder_path, seq_len, pred_len, samples=5)
     plt.close()
 
 
+def plot_predictions(true_vals, pred_vals, step_idx=0, var_idx=0, n_points=100, title="Predictions vs True Values"):
+    """
+    繪製預測值與真實值的比較圖
+    
+    Parameters:
+    -----------
+    true_vals : numpy.ndarray
+        真實值數據
+    pred_vals : numpy.ndarray
+        預測值數據
+    step_idx : int
+        要繪製的時間步索引
+    var_idx : int
+        要繪製的變量索引
+    n_points : int
+        要顯示的數據點數量
+    title : str
+        圖表標題
+    """
+    # 確定數據維度
+    if len(true_vals.shape) > 2:  # 形狀為 [batch, seq_len, n_vars]
+        n_variables = true_vals.shape[2]
+        # 選取特定的時間步和變量
+        true_to_plot = true_vals[:n_points, step_idx, var_idx]
+        pred_to_plot = pred_vals[:n_points, step_idx, var_idx]
+    else:  # 形狀為 [batch, seq_len*n_vars]
+        # 假設這種情況下，數據已經被平坦化為 [batch, seq_len*n_vars] 的形式
+        n_variables = true_vals.shape[1] // pred_len  # pred_len 需要從函數外部獲取
+        idx = step_idx * n_variables + var_idx
+        true_to_plot = true_vals[:n_points, idx]
+        pred_to_plot = pred_vals[:n_points, idx]
+    
+    plt.figure(figsize=(10, 5))
+    plt.plot(true_to_plot, label='True', marker='o', markersize=3)
+    plt.plot(pred_to_plot, label='Predicted', marker='x', markersize=3)
+    plt.legend()
+    plt.title(title)
+    plt.savefig(f"{title.replace(' ', '_')}.png", dpi=300)
+    plt.close()
+
+
 # 定義多層感知器 (MLP) 模型
 class MLP(nn.Module):
     def __init__(self, seq_len, pred_len, input_dim, hidden_dims=[64, 128, 64]):
@@ -494,6 +535,9 @@ if __name__ == "__main__":
         
         # 獲取特徵維度
         input_dim = train_x.shape[2]
+
+        # 儲存不同種子的實驗結果
+        mlp_results = []
         
         print(f"Training data shape: {train_x.shape}, {train_y.shape}")
         print(f"Validation data shape: {val_x.shape}, {val_y.shape}")
@@ -513,8 +557,35 @@ if __name__ == "__main__":
             # 保存結果
             setting = f"weather_{seq_len}_{pred_len}_seed{seed}"
             save_nn_results(mlp_preds, mlp_trues, setting, "MLP", seq_len, pred_len)
+
+            # 收集結果到列表
+            mlp_results.append({
+                'seed': seed,
+                'metrics': mlp_metrics,
+                'preds': mlp_preds,
+                'trues': mlp_trues
+            })
             
             print(f"\nResults for random seed {seed}:")
             print(f"MLP\t\tMAE: {mlp_metrics[0]:.4f}\tMSE: {mlp_metrics[1]:.4f}\tRMSE: {mlp_metrics[2]:.4f}\tCORR: {mlp_metrics[6]:.4f}")
+        
+        # 計算並顯示平均結果
+        print(f"\n{'-'*50}")
+        print(f"Average results across {len(random_seeds)} seeds:")
+        avg_mae = np.mean([res['metrics'][0] for res in mlp_results])
+        avg_mse = np.mean([res['metrics'][1] for res in mlp_results])
+        avg_rmse = np.mean([res['metrics'][2] for res in mlp_results])
+        avg_corr = np.mean([res['metrics'][6] for res in mlp_results])
+        print(f"MLP\t\tMAE: {avg_mae:.4f}\tMSE: {avg_mse:.4f}\tRMSE: {avg_rmse:.4f}\tCORR: {avg_corr:.4f}")
+        
+        # 找出表現最佳的模型並繪製
+        best_idx = np.argmin([res['metrics'][0] for res in mlp_results])
+        best_seed = mlp_results[best_idx]['seed']
+        best_preds = mlp_results[best_idx]['preds']
+        best_trues = mlp_results[best_idx]['trues']
+        
+        # 繪製最佳模型結果
+        plot_predictions(best_trues, best_preds, 
+                        title=f"MLP Best Results (pred_len={pred_len}, seed={best_seed})")
 
     print("\nAll experiments completed!")
