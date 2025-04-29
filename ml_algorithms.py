@@ -416,46 +416,94 @@ def save_ml_results(pred, true, setting, model_name, seq_len, pred_len):
 if __name__ == "__main__":
     # Parameter settings
     seq_len = 96
-    pred_len = 96
+    # 使用與 weather.sh 相同的預測長度設定
+    pred_len_list = [96, 192, 336, 720]
+    # 使用與 weather.sh 相同的隨機種子設定
+    random_seed_list = [2024, 2025, 2026, 2027, 2028]
     features = 'M'  # Use multivariate prediction
     
-    # Load weather data
-    print(f"Loading Weather data, sequence length={seq_len}, prediction length={pred_len}")
-    train_x, train_y, val_x, val_y, test_x, test_y, scaler = load_weather_data(
-        seq_len=seq_len, pred_len=pred_len, features=features
-    )
-    
-    # Weather dataset has 21 variables
-    features_per_step = 21  # Number of features in weather.csv
-    
-    print(f"Training data shape: {train_x.shape}, {train_y.shape}")
-    print(f"Validation data shape: {val_x.shape}, {val_y.shape}")
-    print(f"Test data shape: {test_x.shape}, {test_y.shape}")
-    
-    # Train and evaluate LightGBM model
-    lgbm_models, lgbm_val_pred, lgbm_test_pred, lgbm_val_metrics, lgbm_test_metrics = train_and_evaluate_lgbm(
-        train_x, train_y, val_x, val_y, test_x, test_y, 
-        pred_len=pred_len, features_per_step=features_per_step,
-        n_estimators=200, learning_rate=0.1, max_depth=-1  # -1 means no limit on tree depth
-    )
-    
-    # Train and evaluate Random Forest model
-    rf_models, rf_val_pred, rf_test_pred, rf_val_metrics, rf_test_metrics = train_and_evaluate_rf(
-        train_x, train_y, val_x, val_y, test_x, test_y, 
-        pred_len=pred_len, features_per_step=features_per_step,
-        n_estimators=200, max_depth=10
-    )
-    
-    # Plot prediction results
-    plot_predictions(test_y, lgbm_test_pred, title="Weather LightGBM Predictions vs True Values")
-    plot_predictions(test_y, rf_test_pred, title="Weather Random Forest Predictions vs True Values")
-    
-    # Save results
-    save_ml_results(lgbm_test_pred, test_y, "weather", "LightGBM", seq_len, pred_len)
-    save_ml_results(rf_test_pred, test_y, "weather", "RandomForest", seq_len, pred_len)
-    
-    # Output model comparison results
-    print("\nModel Comparison (Test Set Results):")
-    print("Model\t\tMAE\t\tRMSE")
-    print(f"LightGBM\t{lgbm_test_metrics[0]:.4f}\t\t{lgbm_test_metrics[2]:.4f}")
-    print(f"RandomForest\t{rf_test_metrics[0]:.4f}\t\t{rf_test_metrics[2]:.4f}")
+    # 針對每個預測長度運行模型
+    for pred_len in pred_len_list:
+        print(f"\n{'-'*50}")
+        print(f"Running for prediction length: {pred_len}")
+        print(f"{'-'*50}")
+        
+        # Load weather data
+        print(f"Loading Weather data, sequence length={seq_len}, prediction length={pred_len}")
+        train_x, train_y, val_x, val_y, test_x, test_y, scaler = load_weather_data(
+            seq_len=seq_len, pred_len=pred_len, features=features
+        )
+        
+        # Weather dataset has 21 variables
+        features_per_step = 21  # Number of features in weather.csv
+        
+        print(f"Training data shape: {train_x.shape}, {train_y.shape}")
+        print(f"Validation data shape: {val_x.shape}, {val_y.shape}")
+        print(f"Test data shape: {test_x.shape}, {test_y.shape}")
+        
+        # 存儲每個隨機種子的結果
+        lgbm_results = []
+        rf_results = []
+        
+        # 針對每個隨機種子運行模型
+        for random_seed in random_seed_list:
+            print(f"\nRunning with random seed: {random_seed}")
+            
+            # Train and evaluate LightGBM model
+            lgbm_models, lgbm_val_pred, lgbm_test_pred, lgbm_val_metrics, lgbm_test_metrics = train_and_evaluate_lgbm(
+                train_x, train_y, val_x, val_y, test_x, test_y, 
+                pred_len=pred_len, features_per_step=features_per_step,
+                n_estimators=200, learning_rate=0.01, max_depth=-1, show_progress=False,  # 使用與 weather.sh 相同的學習率
+            )
+            
+            # 使用隨機種子設定 RandomForestRegressor
+            rf_models, rf_val_pred, rf_test_pred, rf_val_metrics, rf_test_metrics = train_and_evaluate_rf(
+                train_x, train_y, val_x, val_y, test_x, test_y, 
+                pred_len=pred_len, features_per_step=features_per_step,
+                n_estimators=200, max_depth=10, show_progress=False
+            )
+            
+            # 儲存每個隨機種子的結果
+            lgbm_results.append({
+                'seed': random_seed,
+                'val_metrics': lgbm_val_metrics,
+                'test_metrics': lgbm_test_metrics,
+                'test_pred': lgbm_test_pred
+            })
+            
+            rf_results.append({
+                'seed': random_seed,
+                'val_metrics': rf_val_metrics,
+                'test_metrics': rf_test_metrics,
+                'test_pred': rf_test_pred
+            })
+            
+            # 保存帶有隨機種子信息的結果
+            setting = f"weather_{seq_len}_{pred_len}_seed{random_seed}"
+            save_ml_results(lgbm_test_pred, test_y, setting, "LightGBM", seq_len, pred_len)
+            save_ml_results(rf_test_pred, test_y, setting, "RandomForest", seq_len, pred_len)
+        
+        # 計算並打印平均結果
+        print(f"\n{'-'*50}")
+        print(f"Average results for prediction length {pred_len} across {len(random_seed_list)} seeds:")
+        
+        # LightGBM 平均結果
+        lgbm_avg_mae = np.mean([res['test_metrics'][0] for res in lgbm_results])
+        lgbm_avg_rmse = np.mean([res['test_metrics'][2] for res in lgbm_results])
+        
+        # RandomForest 平均結果
+        rf_avg_mae = np.mean([res['test_metrics'][0] for res in rf_results])
+        rf_avg_rmse = np.mean([res['test_metrics'][2] for res in rf_results])
+        
+        print("Model\t\tAvg MAE\t\tAvg RMSE")
+        print(f"LightGBM\t{lgbm_avg_mae:.4f}\t\t{lgbm_avg_rmse:.4f}")
+        print(f"RandomForest\t{rf_avg_mae:.4f}\t\t{rf_avg_rmse:.4f}")
+        
+        # 為平均結果繪圖
+        best_lgbm_idx = np.argmin([res['test_metrics'][0] for res in lgbm_results])
+        best_rf_idx = np.argmin([res['test_metrics'][0] for res in rf_results])
+        
+        plot_predictions(test_y, lgbm_results[best_lgbm_idx]['test_pred'], 
+                         title=f"Weather LightGBM (pred_len={pred_len}) - Best Results")
+        plot_predictions(test_y, rf_results[best_rf_idx]['test_pred'], 
+                         title=f"Weather RandomForest (pred_len={pred_len}) - Best Results")
