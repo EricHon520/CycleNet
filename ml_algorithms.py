@@ -10,19 +10,19 @@ import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
 
-# 添加 LightGBM
+# Add LightGBM
 import lightgbm as lgbm
 
 
 def load_weather_data(root_path='./dataset/', data_path='weather.csv', 
                    seq_len=96, pred_len=96, features='M'):
     """
-    加載Weather數據集，並準備用於機器學習模型
+    Load Weather dataset and prepare for machine learning models
     """
     df_raw = pd.read_csv(os.path.join(root_path, data_path))
     
-    # 設置數據邊界（與原始程式碼一致，使用相同的訓練/驗證/測試劃分）
-    # Weather數據的邊界設置 (70%/20%/10%)
+    # Set data boundaries (consistent with the original code, using the same train/validation/test split)
+    # Weather data boundaries setup (70%/20%/10%)
     num_train = int(len(df_raw) * 0.7)
     num_test = int(len(df_raw) * 0.2)
     num_vali = len(df_raw) - num_train - num_test
@@ -30,22 +30,22 @@ def load_weather_data(root_path='./dataset/', data_path='weather.csv',
     border1s = [0, num_train - seq_len, len(df_raw) - num_test - seq_len]
     border2s = [num_train, num_train + num_vali, len(df_raw)]
     
-    # 選擇特徵列
+    # Select feature columns
     if features == 'M' or features == 'MS':
         cols_data = df_raw.columns[1:]
         df_data = df_raw[cols_data]
     else:
-        # 如果需要單變量預測，默認使用WetBulbCelsuis作為目標變量
+        # If single-variable prediction is needed, use WetBulbCelsius as the default target variable
         target = 'OT'
         df_data = df_raw[[target]]
     
-    # 標準化數據
+    # Standardize data
     scaler = StandardScaler()
     train_data = df_data[border1s[0]:border2s[0]]
     scaler.fit(train_data.values)
     data = scaler.transform(df_data.values)
     
-    # 提取時間戳
+    # Extract timestamps
     df_stamp = df_raw[['date']][border1s[0]:border2s[2]]
     df_stamp['date'] = pd.to_datetime(df_stamp.date)
     df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)
@@ -54,7 +54,7 @@ def load_weather_data(root_path='./dataset/', data_path='weather.csv',
     df_stamp['hour'] = df_stamp.date.apply(lambda row: row.hour, 1)
     data_stamp = df_stamp.drop(columns=['date']).values
     
-    # 返回訓練集、驗證集和測試集
+    # Return training, validation and test sets
     train_x = data[border1s[0]:border2s[0]-pred_len, :]
     train_y = data[border1s[0]+seq_len:border2s[0], :]
     
@@ -64,12 +64,12 @@ def load_weather_data(root_path='./dataset/', data_path='weather.csv',
     test_x = data[border1s[2]:border2s[2]-pred_len, :]
     test_y = data[border1s[2]+seq_len:border2s[2], :]
     
-    # 為了適用於機器學習模型，我們需要將序列轉換為特徵
+    # To adapt for machine learning models, we need to convert sequences to features
     train_x_reshaped = []
     val_x_reshaped = []
     test_x_reshaped = []
     
-    # 為每個預測點，提取seq_len長度的歷史數據作為特徵
+    # For each prediction point, extract historical data of length seq_len as features
     for i in range(len(train_x) - seq_len + 1):
         train_x_reshaped.append(train_x[i:i+seq_len].flatten())
     for i in range(len(val_x) - seq_len + 1):
@@ -81,8 +81,8 @@ def load_weather_data(root_path='./dataset/', data_path='weather.csv',
     val_x_reshaped = np.array(val_x_reshaped)
     test_x_reshaped = np.array(test_x_reshaped)
     
-    # 為了預測pred_len長度的序列，需要相應地準備標籤數據
-    # 對應的y數據需要是未來pred_len個時間步的值
+    # To predict a sequence of length pred_len, prepare the label data accordingly
+    # The y data should be the values of the next pred_len time steps
     train_y_reshaped = []
     val_y_reshaped = []
     test_y_reshaped = []
@@ -98,7 +98,7 @@ def load_weather_data(root_path='./dataset/', data_path='weather.csv',
     val_y_reshaped = np.array(val_y_reshaped)
     test_y_reshaped = np.array(test_y_reshaped)
     
-    # 調整數據形狀以方便後續處理
+    # Adjust data shape for easier processing
     train_y_reshaped = train_y_reshaped.reshape(train_y_reshaped.shape[0], -1)
     val_y_reshaped = val_y_reshaped.reshape(val_y_reshaped.shape[0], -1)
     test_y_reshaped = test_y_reshaped.reshape(test_y_reshaped.shape[0], -1)
@@ -110,7 +110,7 @@ def load_weather_data(root_path='./dataset/', data_path='weather.csv',
 
 def evaluate_metrics(pred, true):
     """
-    計算評估指標：MAE, MSE, RMSE
+    Calculate evaluation metrics: MAE, MSE, RMSE
     """
     mae = mean_absolute_error(true, pred)
     mse = mean_squared_error(true, pred)
@@ -119,31 +119,31 @@ def evaluate_metrics(pred, true):
 
 def evaluate_metrics_extended(pred, true):
     """
-    計算與exp_main.py完全相同的評估指標
+    Calculate the same evaluation metrics as in exp_main.py
     """
-    # 確保形狀一致 - 處理多變量情況
+    # Ensure consistent shapes - handle multivariate cases
     pred = np.array(pred)
     true = np.array(true)
     
-    # 基本指標
+    # Basic metrics
     mae = np.mean(np.abs(pred - true))
     mse = np.mean((pred - true) ** 2)
     rmse = np.sqrt(mse)
     
-    # 進階指標
-    # 防止除以零
+    # Advanced metrics
+    # Prevent division by zero
     mask = true != 0
     mape = np.mean(np.abs((true[mask] - pred[mask]) / true[mask]))
     mspe = np.mean(((true[mask] - pred[mask]) / true[mask]) ** 2)
     
-    # 相對平方誤差
+    # Relative squared error
     mean_true = np.mean(true)
     numerator = np.sum((true - pred) ** 2)
     denominator = np.sum((true - mean_true) ** 2)
     rse = numerator / denominator if denominator != 0 else np.inf
     
-    # 相關係數
-    # 重塑為二維數組計算相關性
+    # Correlation coefficient
+    # Reshape to 2D arrays to calculate correlation
     pred_flat = pred.reshape(-1)
     true_flat = true.reshape(-1)
     corr = np.corrcoef(pred_flat, true_flat)[0, 1] if len(pred_flat) > 1 else 0
@@ -154,26 +154,26 @@ def train_and_evaluate_lgbm(train_x, train_y, val_x, val_y, test_x, test_y,
                            pred_len, features_per_step, n_estimators=100, 
                            learning_rate=0.1, max_depth=-1, show_progress=True):
     """
-    訓練與評估LightGBM模型
+    Train and evaluate LightGBM models
     """
-    print(f"開始訓練LightGBM模型 (n_estimators={n_estimators}, learning_rate={learning_rate}, max_depth={max_depth})...")
+    print(f"Starting LightGBM model training (n_estimators={n_estimators}, learning_rate={learning_rate}, max_depth={max_depth})...")
     
-    # 獲取總變量數
+    # Get total number of variables
     n_variables = train_y.shape[1] // pred_len
     total_models = pred_len * n_variables
     models = []
     
-    # 為每個輸出時間步和變量創建一個LightGBM模型
+    # Create a LightGBM model for each output time step and variable
     for i in range(pred_len):
         for j in range(n_variables):
             if show_progress:
-                print(f"訓練模型 {len(models) + 1}/{total_models}...")
+                print(f"Training model {len(models) + 1}/{total_models}...")
                 
-            # 提取當前時間步和特徵的目標值
+            # Extract target value for current time step and feature
             target_idx = i * n_variables + j
             current_y = train_y[:, target_idx]
             
-            # 創建並訓練LightGBM模型
+            # Create and train LightGBM model
             model = lgbm.LGBMRegressor(n_estimators=n_estimators, 
                                        learning_rate=learning_rate,
                                        max_depth=max_depth, 
@@ -181,27 +181,27 @@ def train_and_evaluate_lgbm(train_x, train_y, val_x, val_y, test_x, test_y,
             model.fit(train_x, current_y)
             models.append(model)
     
-    # 在驗證集上預測
+    # Predict on validation set
     val_pred = np.zeros((val_x.shape[0], val_y.shape[1]))
     for i in range(pred_len):
         for j in range(n_variables):
             target_idx = i * n_variables + j
             val_pred[:, target_idx] = models[target_idx].predict(val_x)
     
-    # 在測試集上預測
+    # Predict on test set
     test_pred = np.zeros((test_x.shape[0], test_y.shape[1]))
     for i in range(pred_len):
         for j in range(n_variables):
             target_idx = i * n_variables + j
             test_pred[:, target_idx] = models[target_idx].predict(test_x)
     
-    # 計算評估指標
+    # Calculate evaluation metrics
     val_mae, val_mse, val_rmse = evaluate_metrics(val_pred, val_y)
     test_mae, test_mse, test_rmse = evaluate_metrics(test_pred, test_y)
     
-    print("LightGBM模型評估結果:")
-    print(f"驗證集 - MAE: {val_mae:.4f}, RMSE: {val_rmse:.4f}")
-    print(f"測試集 - MAE: {test_mae:.4f}, RMSE: {test_rmse:.4f}")
+    print("LightGBM model evaluation results:")
+    print(f"Validation set - MAE: {val_mae:.4f}, RMSE: {val_rmse:.4f}")
+    print(f"Test set - MAE: {test_mae:.4f}, RMSE: {test_rmse:.4f}")
     
     return models, val_pred, test_pred, (val_mae, val_mse, val_rmse), (test_mae, test_mse, test_rmse)
 
@@ -209,25 +209,25 @@ def train_and_evaluate_rf(train_x, train_y, val_x, val_y, test_x, test_y,
                           pred_len, features_per_step, n_estimators=100, 
                           max_depth=None, show_progress=True):
     """
-    訓練與評估隨機森林模型
+    Train and evaluate Random Forest models
     """
-    print(f"開始訓練隨機森林模型 (n_estimators={n_estimators}, max_depth={max_depth})...")
+    print(f"Starting Random Forest model training (n_estimators={n_estimators}, max_depth={max_depth})...")
     
-    # 由於RandomForest是單輸出模型，我們需要為每個輸出時間步的每個特徵訓練一個單獨的模型
+    # Since RandomForest is a single-output model, we need to train a separate model for each output time step and feature
     models = []
     
-    # 獲取總變量數
+    # Get total number of variables
     n_variables = train_y.shape[1] // pred_len
     
     total_models = pred_len * n_variables
     
-    # 為每個輸出時間步和變量創建一個RandomForest模型
+    # Create a RandomForest model for each output time step and variable
     for i in range(pred_len):
         for j in range(n_variables):
             if show_progress:
-                print(f"訓練模型 {len(models) + 1}/{total_models}...")
+                print(f"Training model {len(models) + 1}/{total_models}...")
                 
-            # 提取當前時間步和特徵的目標值
+            # Extract target value for current time step and feature
             target_idx = i * n_variables + j
             current_y = train_y[:, target_idx]
             
@@ -235,33 +235,33 @@ def train_and_evaluate_rf(train_x, train_y, val_x, val_y, test_x, test_y,
             model.fit(train_x, current_y)
             models.append(model)
     
-    # 在驗證集上預測
+    # Predict on validation set
     val_pred = np.zeros((val_x.shape[0], val_y.shape[1]))
     for i in range(pred_len):
         for j in range(n_variables):
             target_idx = i * n_variables + j
             val_pred[:, target_idx] = models[target_idx].predict(val_x)
     
-    # 在測試集上預測
+    # Predict on test set
     test_pred = np.zeros((test_x.shape[0], test_y.shape[1]))
     for i in range(pred_len):
         for j in range(n_variables):
             target_idx = i * n_variables + j
             test_pred[:, target_idx] = models[target_idx].predict(test_x)
     
-    # 計算評估指標
+    # Calculate evaluation metrics
     val_mae, val_mse, val_rmse = evaluate_metrics(val_pred, val_y)
     test_mae, test_mse, test_rmse = evaluate_metrics(test_pred, test_y)
     
-    print("隨機森林模型評估結果:")
-    print(f"驗證集 - MAE: {val_mae:.4f}, RMSE: {val_rmse:.4f}")
-    print(f"測試集 - MAE: {test_mae:.4f}, RMSE: {test_rmse:.4f}")
+    print("Random Forest model evaluation results:")
+    print(f"Validation set - MAE: {val_mae:.4f}, RMSE: {val_rmse:.4f}")
+    print(f"Test set - MAE: {test_mae:.4f}, RMSE: {test_rmse:.4f}")
     
     return models, val_pred, test_pred, (val_mae, val_mse, val_rmse), (test_mae, test_mse, test_rmse)
 
 def plot_predictions(true_vals, pred_vals, step_idx=0, var_idx=0, n_points=100, title="Predictions vs True Values"):
     """
-    繪製預測結果與真實值的對比圖
+    Plot comparison of predictions and true values
     """
     n_variables = true_vals.shape[1] // pred_len
     idx = step_idx * n_variables + var_idx
@@ -276,17 +276,17 @@ def plot_predictions(true_vals, pred_vals, step_idx=0, var_idx=0, n_points=100, 
 
 def visualize_predictions(pred, true, folder_path, seq_len, pred_len, samples=5):
     """
-    繪製預測結果與真實值的比較圖
+    Plot comparison charts of predictions and true values
     """
-    # 選擇樣本數
+    # Select number of samples
     sample_count = min(samples, pred.shape[0])
     
-    # 對每個選定樣本繪製圖形
+    # Plot charts for each selected sample
     for i in range(sample_count):
-        # 取單個時間序列樣本
-        # 對於多變量，我們選擇第一個變量進行可視化
+        # Get single time series sample
+        # For multivariate data, we select the first variable for visualization
         if len(pred.shape) > 2:
-            target_var = 0  # 可以根據需要更改
+            target_var = 0  # Can be changed according to needs
             sample_pred = pred[i, :, target_var]
             sample_true = true[i, :, target_var]
         else:
@@ -295,10 +295,10 @@ def visualize_predictions(pred, true, folder_path, seq_len, pred_len, samples=5)
         
         plt.figure(figsize=(12, 6))
         
-        # 創建序列索引
+        # Create sequence index
         t = np.arange(0, len(sample_true))
         
-        # 繪製預測值和真實值
+        # Plot predicted and true values
         plt.plot(t, sample_true, label='True', color='blue', linestyle='-')
         plt.plot(t, sample_pred, label='Predicted', color='red', linestyle='--')
         
@@ -308,30 +308,30 @@ def visualize_predictions(pred, true, folder_path, seq_len, pred_len, samples=5)
         plt.title(f'Sample {i+1}: Prediction vs True Values')
         plt.grid(True)
         
-        # 保存圖片
+        # Save image
         plt.savefig(os.path.join(folder_path, f'sample_{i+1}.png'), dpi=300, bbox_inches='tight')
         plt.close()
     
-    # 如果有多個變量，繪製平均性能圖
+    # If there are multiple variables, plot average performance chart
     if len(pred.shape) > 2 and pred.shape[2] > 1:
         plot_multivariate_performance(pred, true, folder_path)
 
 def plot_multivariate_performance(pred, true, folder_path):
     """
-    為多變量時間序列繪製性能分析圖
+    Plot performance analysis charts for multivariate time series
     
-    參數:
-    - pred: 預測值 [samples, time_steps, variables]
-    - true: 真實值 [samples, time_steps, variables]
-    - folder_path: 保存圖表的目錄
+    Parameters:
+    - pred: Predicted values [samples, time_steps, variables]
+    - true: True values [samples, time_steps, variables]
+    - folder_path: Directory to save charts
     """
     if len(pred.shape) < 3 or len(true.shape) < 3:
-        print("需要多變量數據才能繪製多變量性能圖")
+        print("Multivariate data is required to plot multivariate performance charts")
         return
         
     n_variables = pred.shape[2]
     
-    # 計算每個變量的性能指標
+    # Calculate performance metrics for each variable
     var_metrics = []
     for i in range(n_variables):
         mae, mse, rmse, mape, mspe, rse, corr = evaluate_metrics_extended(
@@ -344,118 +344,118 @@ def plot_multivariate_performance(pred, true, folder_path):
             'corr': corr
         })
     
-    # 繪製不同變量的性能對比圖
+    # Plot comparison charts for different variables' performance
     metrics_to_plot = ['mae', 'rmse', 'mape', 'corr']
     for metric_name in metrics_to_plot:
         plt.figure(figsize=(12, 6))
         metric_values = [metrics[metric_name] for metrics in var_metrics]
         
         plt.bar(range(n_variables), metric_values, color='skyblue')
-        plt.xlabel('變量索引')
+        plt.xlabel('Variable Index')
         plt.ylabel(metric_name.upper())
-        plt.title(f'各變量的{metric_name.upper()}指標')
+        plt.title(f'{metric_name.upper()} Metric for Each Variable')
         plt.xticks(range(n_variables))
         plt.grid(axis='y', linestyle='--', alpha=0.7)
         
-        # 保存圖表
+        # Save chart
         plt.savefig(os.path.join(folder_path, f'multivariate_{metric_name}.png'), dpi=300, bbox_inches='tight')
         plt.close()
     
-    # 繪製熱力圖，展示不同變量的預測準確度
+    # Plot heatmap showing prediction accuracy for different variables
     plt.figure(figsize=(10, 8))
     metrics_array = np.array([[m['mae'], m['rmse'], m['mape'], m['corr']] for m in var_metrics])
     
-    # 處理可能的無限值或NaN
+    # Handle potential infinity or NaN values
     metrics_array = np.nan_to_num(metrics_array, nan=0, posinf=1, neginf=0)
     
     plt.imshow(metrics_array, cmap='coolwarm', aspect='auto')
-    plt.colorbar(label='指標值')
-    plt.xlabel('評估指標')
-    plt.ylabel('變量索引')
-    plt.title('多變量預測性能熱力圖')
+    plt.colorbar(label='Metric Value')
+    plt.xlabel('Evaluation Metrics')
+    plt.ylabel('Variable Index')
+    plt.title('Multivariate Prediction Performance Heatmap')
     plt.xticks(range(4), ['MAE', 'RMSE', 'MAPE', 'CORR'])
     plt.yticks(range(n_variables))
     
     plt.savefig(os.path.join(folder_path, 'multivariate_heatmap.png'), dpi=300, bbox_inches='tight')
     plt.close()
     
-    # 保存數值結果
+    # Save numerical results
     metrics_df = pd.DataFrame(var_metrics)
-    metrics_df.index = [f'變量_{i}' for i in range(n_variables)]
+    metrics_df.index = [f'Variable_{i}' for i in range(n_variables)]
     metrics_df.to_csv(os.path.join(folder_path, 'multivariate_metrics.csv'))
 
 def save_ml_results(pred, true, setting, model_name, seq_len, pred_len):
     """
-    保存與深度學習模型兼容的結果格式
+    Save results in a format compatible with deep learning models
     """
-    # 創建結果目錄
+    # Create results directory
     folder_path = f'./results/{setting}_{model_name}/'
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
     
-    # 計算評估指標
+    # Calculate evaluation metrics
     mae, mse, rmse, mape, mspe, rse, corr = evaluate_metrics_extended(pred, true)
     
-    # 打印和保存主要指標
+    # Print and save main metrics
     print(f'{model_name} - mse:{mse:.4f}, mae:{mae:.4f}')
     with open("result.txt", 'a') as f:
         f.write(f"{setting}_{model_name}  \n")
         f.write(f'mse:{mse:.4f}, mae:{mae:.4f}, rmse:{rmse:.4f}, mape:{mape:.4f}, mspe:{mspe:.4f}, rse:{rse:.4f}, corr:{corr:.4f}')
         f.write('\n\n')
     
-    # 保存評估指標
+    # Save evaluation metrics
     np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe, rse, corr]))
     np.save(folder_path + 'pred.npy', pred)
     np.save(folder_path + 'true.npy', true)
     
-    # 視覺化部分樣本
+    # Visualize some samples
     visualize_predictions(pred, true, folder_path, seq_len, pred_len)
     
     return mae, mse, rmse, mape, mspe, rse, corr
 
 if __name__ == "__main__":
-    # 參數設置
+    # Parameter settings
     seq_len = 96
     pred_len = 96
-    features = 'M'  # 使用多變量預測
+    features = 'M'  # Use multivariate prediction
     
-    # 加載weather數據
-    print(f"加載Weather數據，序列長度={seq_len}，預測長度={pred_len}")
+    # Load weather data
+    print(f"Loading Weather data, sequence length={seq_len}, prediction length={pred_len}")
     train_x, train_y, val_x, val_y, test_x, test_y, scaler = load_weather_data(
         seq_len=seq_len, pred_len=pred_len, features=features
     )
     
-    # Weather數據集有21個變量
-    features_per_step = 21  # weather.csv中的特徵數量
+    # Weather dataset has 21 variables
+    features_per_step = 21  # Number of features in weather.csv
     
-    print(f"訓練資料形狀: {train_x.shape}, {train_y.shape}")
-    print(f"驗證資料形狀: {val_x.shape}, {val_y.shape}")
-    print(f"測試資料形狀: {test_x.shape}, {test_y.shape}")
+    print(f"Training data shape: {train_x.shape}, {train_y.shape}")
+    print(f"Validation data shape: {val_x.shape}, {val_y.shape}")
+    print(f"Test data shape: {test_x.shape}, {test_y.shape}")
     
-    # 訓練與評估LightGBM模型
+    # Train and evaluate LightGBM model
     lgbm_models, lgbm_val_pred, lgbm_test_pred, lgbm_val_metrics, lgbm_test_metrics = train_and_evaluate_lgbm(
         train_x, train_y, val_x, val_y, test_x, test_y, 
         pred_len=pred_len, features_per_step=features_per_step,
-        n_estimators=200, learning_rate=0.1, max_depth=-1  # -1表示不限制樹的深度
+        n_estimators=200, learning_rate=0.1, max_depth=-1  # -1 means no limit on tree depth
     )
     
-    # 訓練與評估隨機森林模型
+    # Train and evaluate Random Forest model
     rf_models, rf_val_pred, rf_test_pred, rf_val_metrics, rf_test_metrics = train_and_evaluate_rf(
         train_x, train_y, val_x, val_y, test_x, test_y, 
         pred_len=pred_len, features_per_step=features_per_step,
         n_estimators=200, max_depth=10
     )
     
-    # 繪製預測結果
+    # Plot prediction results
     plot_predictions(test_y, lgbm_test_pred, title="Weather LightGBM Predictions vs True Values")
     plot_predictions(test_y, rf_test_pred, title="Weather Random Forest Predictions vs True Values")
     
-    # 保存結果
+    # Save results
     save_ml_results(lgbm_test_pred, test_y, "weather", "LightGBM", seq_len, pred_len)
     save_ml_results(rf_test_pred, test_y, "weather", "RandomForest", seq_len, pred_len)
     
-    # 輸出模型比較結果
-    print("\n模型比較 (測試集結果):")
-    print("模型\t\tMAE\t\tRMSE")
+    # Output model comparison results
+    print("\nModel Comparison (Test Set Results):")
+    print("Model\t\tMAE\t\tRMSE")
     print(f"LightGBM\t{lgbm_test_metrics[0]:.4f}\t\t{lgbm_test_metrics[2]:.4f}")
     print(f"RandomForest\t{rf_test_metrics[0]:.4f}\t\t{rf_test_metrics[2]:.4f}")
