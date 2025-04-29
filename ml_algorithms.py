@@ -457,10 +457,11 @@ def visualize_predictions(pred, true, folder_path, seq_len, pred_len, samples=5)
         # Save image
         plt.savefig(os.path.join(folder_path, f'sample_{i+1}.png'), dpi=300, bbox_inches='tight')
         plt.close()
-    
+    '''
     # If there are multiple variables, plot average performance chart
     if len(pred.shape) > 2 and pred.shape[2] > 1:
         plot_multivariate_performance(pred, true, folder_path)
+    '''
 
 def plot_multivariate_performance(pred, true, folder_path):
     """
@@ -563,15 +564,15 @@ if __name__ == "__main__":
     # Parameter settings
     seq_len = 96
     # 使用與 weather.sh 相同的預測長度設定
-    pred_len_list = [96, 192, 336, 720]
+    pred_len_list = [96]
     # 使用與 weather.sh 相同的隨機種子設定
-    random_seed_list = [2024, 2025, 2026, 2027, 2028]
+    random_seed_list = [2024]
     features = 'M'  # Use multivariate prediction
     
     # 計算總訓練模型數量
     total_pred_len = sum(pred_len_list)
     features_per_step = 21  # Weather dataset has 21 variables
-    total_models = total_pred_len * features_per_step * len(random_seed_list) * 2  # 2 types of models
+    total_models = total_pred_len * features_per_step * len(random_seed_list) * 1  # 2 types of models
     
     print(f"=" * 80)
     print(f"A total of {total_models} models need to be trained")
@@ -609,29 +610,29 @@ if __name__ == "__main__":
             print(f"\nProcess random seed: {random_seed}, prediction length: {pred_len}")
             print(f"Total progress: {completed_models}/{total_models} completed")
             
-            # Train and evaluate XGBoost model with GPU acceleration
-            xgb_models, xgb_val_pred, xgb_test_pred, xgb_val_metrics, xgb_test_metrics = train_and_evaluate_xgb(
-                train_x, train_y, val_x, val_y, test_x, test_y, 
-                pred_len=pred_len, features_per_step=features_per_step,
-                n_estimators=200, learning_rate=0.01, max_depth=6, show_progress=True
-            )
-            
-            completed_models += pred_len * features_per_step
-            print(f"Total progress: {completed_models}/{total_models} completed")
-            
             # Train and evaluate Ridge model (linear model - much faster)
             ridge_models, ridge_val_pred, ridge_test_pred, ridge_val_metrics, ridge_test_metrics = train_and_evaluate_ridge(
                 train_x, train_y, val_x, val_y, test_x, test_y, 
                 pred_len=pred_len, features_per_step=features_per_step,
                 alpha=1.0, show_progress=True
             )
-            
+
+            completed_models += pred_len * features_per_step
+            print(f"Total progress: {completed_models}/{total_models} completed")
+            '''
+            # Train and evaluate XGBoost model with GPU acceleration
+            xgb_models, xgb_val_pred, xgb_test_pred, xgb_val_metrics, xgb_test_metrics = train_and_evaluate_xgb(
+                train_x, train_y, val_x, val_y, test_x, test_y, 
+                pred_len=pred_len, features_per_step=features_per_step,
+                n_estimators=100, learning_rate=0.05, max_depth=6, show_progress=True
+            )
+            '''
             completed_models += pred_len * features_per_step
             elapsed = time.time() - main_start_time
             eta = (elapsed / completed_models) * (total_models - completed_models) if completed_models > 0 else 0
             print(f"Total progress: {completed_models}/{total_models} completed")
             print(f"Total time: {elapsed/60:.1f} minutes, estimated remaining time: {eta/60:.1f} minutes")
-            
+            '''
             # 儲存每個隨機種子的結果
             xgb_results.append({
                 'seed': random_seed,
@@ -639,7 +640,7 @@ if __name__ == "__main__":
                 'test_metrics': xgb_test_metrics,
                 'test_pred': xgb_test_pred
             })
-            
+            '''
             ridge_results.append({
                 'seed': random_seed,
                 'val_metrics': ridge_val_metrics,
@@ -649,31 +650,32 @@ if __name__ == "__main__":
             
             # 保存帶有隨機種子信息的結果
             setting = f"weather_{seq_len}_{pred_len}_seed{random_seed}"
-            save_ml_results(xgb_test_pred, test_y, setting, "XGBoost", seq_len, pred_len)
+            #save_ml_results(xgb_test_pred, test_y, setting, "XGBoost", seq_len, pred_len)
             save_ml_results(ridge_test_pred, test_y, setting, "Ridge", seq_len, pred_len)
         
         # 計算並打印平均結果
         print(f"\n{'-'*50}")
         print(f"Average results of prediction length {pred_len} under {len(random_seed_list)} seeds:")
-        
+        '''
         # XGBoost 平均結果
         xgb_avg_mae = np.mean([res['test_metrics'][0] for res in xgb_results])
         xgb_avg_rmse = np.mean([res['test_metrics'][2] for res in xgb_results])
-        
+        '''
         # Ridge 平均結果
         ridge_avg_mae = np.mean([res['test_metrics'][0] for res in ridge_results])
         ridge_avg_rmse = np.mean([res['test_metrics'][2] for res in ridge_results])
         
         print("Model\t\tAverage MAE\t\tAverage RMSE")
-        print(f"XGBoost\t\t{xgb_avg_mae:.4f}\t\t{xgb_avg_rmse:.4f}")
+        #print(f"XGBoost\t\t{xgb_avg_mae:.4f}\t\t{xgb_avg_rmse:.4f}")
         print(f"Ridge Regression\t{ridge_avg_mae:.4f}\t\t{ridge_avg_rmse:.4f}")
         
         # 為平均結果繪圖
-        best_xgb_idx = np.argmin([res['test_metrics'][0] for res in xgb_results])
+        #best_xgb_idx = np.argmin([res['test_metrics'][0] for res in xgb_results])
         best_ridge_idx = np.argmin([res['test_metrics'][0] for res in ridge_results])
-        
+        '''
         plot_predictions(test_y, xgb_results[best_xgb_idx]['test_pred'], 
                          title=f"Weather XGBoost (pred_len={pred_len}) - Best Results")
+        '''
         plot_predictions(test_y, ridge_results[best_ridge_idx]['test_pred'], 
                          title=f"Weather Ridge (pred_len={pred_len}) - Best Results")
     

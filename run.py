@@ -105,30 +105,30 @@ parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple g
 parser.add_argument('--devices', type=str, default='0,1', help='device ids of multile gpus')
 parser.add_argument('--test_flop', action='store_true', default=False, help='See utils/tools for usage')
 
+args = parser.parse_args()
+
+# random seed
+fix_seed = args.random_seed
+random.seed(fix_seed)
+torch.manual_seed(fix_seed)
+np.random.seed(fix_seed)
+
+args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
+
+if args.use_gpu and args.use_multi_gpu:
+    args.devices = args.devices.replace(' ', '')
+    device_ids = args.devices.split(',')
+    args.device_ids = [int(id_) for id_ in device_ids]
+    args.gpu = args.device_ids[0]
+
+print('Args in experiment:')
+print(args)
+
+Exp = Exp_Main
+
 if __name__ == '__main__':
-    # 這可以解決在 macOS 上的多進程問題
-    multiprocessing.set_start_method('spawn', force=True)
-    
-    args = parser.parse_args()
-
-    # 隨機種子設置
-    fix_seed = args.random_seed
-    random.seed(fix_seed)
-    torch.manual_seed(fix_seed)
-    np.random.seed(fix_seed)
-
-    args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
-
-    if args.use_gpu and args.use_multi_gpu:
-        args.devices = args.devices.replace(' ', '')
-        device_ids = args.devices.split(',')
-        args.device_ids = [int(id_) for id_ in device_ids]
-        args.gpu = args.device_ids[0]
-
-    print('Args in experiment:')
-    print(args)
-
-    Exp = Exp_Main
+    import multiprocessing
+    multiprocessing.freeze_support()
 
     if args.is_training:
         for ii in range(args.itr):

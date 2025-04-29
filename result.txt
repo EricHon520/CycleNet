@@ -2878,3 +2878,12 @@ mse:0.2007104605436325, mae:0.26002365350723267
 Solar_720_720_CycleNet_Solar_ftM_sl720_pl720_cycle144_mlp_seed2028  
 mse:0.20077380537986755, mae:0.25914350152015686
 
+weather_96_96_seed2024_Ridge  
+mse:0.1634, mae:0.2483, rmse:0.4042, mape:8.5040, mspe:6118391.8573, rse:0.2837, corr:0.8482
+
+weather_96_96_seed2024_Ridge  
+mse:0.1634, mae:0.2483, rmse:0.4042, mape:8.5040, mspe:6118391.8573, rse:0.2837, corr:0.8482
+
+weather_96_96_CycleNet_custom_ftM_sl96_pl96_cycle144_mlp_seed2024  
+mse:0.1582271158695221, mae:0.20301048457622528
+
