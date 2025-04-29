@@ -10,6 +10,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 import matplotlib.pyplot as plt
 import warnings
 import random
+from utils.tools import EarlyStopping
 warnings.filterwarnings('ignore')
 
 
@@ -424,10 +425,11 @@ def train_and_evaluate_model(model, model_name, train_x, train_y, val_x, val_y, 
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
-    # 記錄最佳模型和驗證損失
-    best_val_loss = float('inf')
-    best_model_state = None
-    patience_counter = 0
+    # 創建檢查點保存路徑
+    checkpoint_path = f'./checkpoints/{model_name}_seq{train_x.shape[1]}_pred{train_y.shape[1]}_seed{random_seed}'
+    
+    # 使用已有的早停機制
+    early_stopping = EarlyStopping(patience=patience, verbose=True)
     
     # 訓練迴圈
     for epoch in range(epochs):
@@ -465,20 +467,14 @@ def train_and_evaluate_model(model, model_name, train_x, train_y, val_x, val_y, 
         # 打印訓練進度
         print(f'Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
         
-        # 早停機制
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_model_state = model.state_dict().copy()
-            patience_counter = 0
-        else:
-            patience_counter += 1
-            if patience_counter >= patience:
-                print(f'Early stopping at epoch {epoch+1}')
-                break
+        # 使用 EarlyStopping
+        early_stopping(val_loss, model, checkpoint_path)
+        if early_stopping.early_stop:
+            print(f'Early stopping at epoch {epoch+1}')
+            break
     
     # 載入最佳模型
-    if best_model_state is not None:
-        model.load_state_dict(best_model_state)
+    model.load_state_dict(torch.load(os.path.join(checkpoint_path, 'checkpoint.pth')))
     
     # 評估階段
     model.eval()
