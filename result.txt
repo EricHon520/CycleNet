@@ -2893,3 +2893,6 @@ mse:0.2183, mae:0.3022, rmse:0.4672, mape:6.8450, mspe:3678056.0000, rse:0.3790,
 weather_96_96_seed2024_MLP  
 mse:0.2244, mae:0.3085, rmse:0.4737, mape:8.7418, mspe:7536266.5000, rse:0.3897, corr:0.7864
 
+weather_96_96_seed2024_MLP  
+mse:0.2240, mae:0.3079, rmse:0.4733, mape:11.6102, mspe:9973569.0000, rse:0.3891, corr:0.7843
+
