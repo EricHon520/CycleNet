@@ -166,12 +166,12 @@ def visualize_predictions(pred, true, folder_path, seq_len, pred_len, samples=5)
         # 為每個選擇的樣本繪製圖表
         for i in range(n_samples):
             plt.figure(figsize=(12, 6))
-            plt.plot(true[i, :, target_var], label='真實值', color='blue', linestyle='-')
-            plt.plot(pred[i, :, target_var], label='預測值', color='red', linestyle='--')
-            plt.xlabel('時間步')
-            plt.ylabel('值')
+            plt.plot(true[i, :, target_var], label='true_value', color='blue', linestyle='-')
+            plt.plot(pred[i, :, target_var], label='predicted_value', color='red', linestyle='--')
+            plt.xlabel('time_step')
+            plt.ylabel('value')
             plt.legend()
-            plt.title(f'樣本 {i+1}: 預測 vs 真實值 (變量 {target_var})')
+            plt.title(f'Sample {i+1}: prediction vs true value (variable {target_var})')
             plt.grid(True)
             plt.savefig(os.path.join(folder_path, f'sample_{i+1}_var_{target_var}.png'), 
                       dpi=300, bbox_inches='tight')
@@ -180,12 +180,12 @@ def visualize_predictions(pred, true, folder_path, seq_len, pred_len, samples=5)
         # 單變量數據
         for i in range(n_samples):
             plt.figure(figsize=(12, 6))
-            plt.plot(true[i], label='真實值', color='blue', linestyle='-')
-            plt.plot(pred[i], label='預測值', color='red', linestyle='--')
-            plt.xlabel('時間步')
-            plt.ylabel('值')
+            plt.plot(true[i], label='true_value', color='blue', linestyle='-')
+            plt.plot(pred[i], label='predicted_value', color='red', linestyle='--')
+            plt.xlabel('time_step')
+            plt.ylabel('value')
             plt.legend()
-            plt.title(f'樣本 {i+1}: 預測 vs 真實值')
+            plt.title(f'Sample {i+1}: prediction vs true value (variable {target_var})')
             plt.grid(True)
             plt.savefig(os.path.join(folder_path, f'sample_{i+1}.png'), dpi=300, bbox_inches='tight')
             plt.close()
@@ -199,12 +199,12 @@ def visualize_predictions(pred, true, folder_path, seq_len, pred_len, samples=5)
         true_mean = true_mean[:, target_var]
         pred_mean = pred_mean[:, target_var]
     
-    plt.plot(true_mean, label='真實平均值', color='blue', linestyle='-')
-    plt.plot(pred_mean, label='預測平均值', color='red', linestyle='--')
-    plt.xlabel('時間步')
-    plt.ylabel('平均值')
+    plt.plot(true_mean, label='true_mean', color='blue', linestyle='-')
+    plt.plot(pred_mean, label='predicted_mean', color='red', linestyle='--')
+    plt.xlabel('time_step')
+    plt.ylabel('value')
     plt.legend()
-    plt.title('所有樣本的平均預測 vs 真實值')
+    plt.title('Average predictions of all samples vs true values')
     plt.grid(True)
     plt.savefig(os.path.join(folder_path, 'average_performance.png'), dpi=300, bbox_inches='tight')
     plt.close()
@@ -359,7 +359,7 @@ def train_and_evaluate_model(model, model_name, train_x, train_y, val_x, val_y, 
     """
     訓練和評估神經網絡模型
     """
-    print(f"開始訓練 {model_name} 模型...")
+    print(f"Starting training {model_name} model...")
     
     # 設置隨機種子以確保可重複性
     torch.manual_seed(random_seed)
@@ -462,7 +462,7 @@ def train_and_evaluate_model(model, model_name, train_x, train_y, val_x, val_y, 
     # 計算評估指標
     test_mae, test_mse, test_rmse, test_mape, test_mspe, test_rse, test_corr = evaluate_metrics(test_preds, test_trues)
     
-    print(f"{model_name} 測試集評估結果:")
+    print(f"{model_name} Test set evaluation results:")
     print(f"MAE: {test_mae:.4f}, MSE: {test_mse:.4f}, RMSE: {test_rmse:.4f}")
     print(f"MAPE: {test_mape:.4f}, MSPE: {test_mspe:.4f}, RSE: {test_rse:.4f}, CORR: {test_corr:.4f}")
     
@@ -472,11 +472,11 @@ def train_and_evaluate_model(model, model_name, train_x, train_y, val_x, val_y, 
 if __name__ == "__main__":
     # 參數設置 - 與 weather.sh 保持一致
     seq_len = 96
-    pred_lengths = [96, 192, 336, 720]  # 與 weather.sh 保持一致的預測長度
-    random_seeds = [2024, 2025, 2026, 2027, 2028]  # 與 weather.sh 保持一致的隨機種子
+    pred_lengths = [96]  # 與 weather.sh 保持一致的預測長度
+    random_seeds = [2024]  # 與 weather.sh 保持一致的隨機種子
     features = 'M'  # 使用多變量預測
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(f"使用設備: {device}")
+    print(f"Device used: {device}")
     batch_size = 256  # 與 weather.sh 一致
     learning_rate = 0.005  # 與 weather.sh 一致
     train_epochs = 30  # 與 weather.sh 一致
@@ -484,10 +484,10 @@ if __name__ == "__main__":
     
     # 對每個預測長度和隨機種子組合進行訓練和評估
     for pred_len in pred_lengths:
-        print(f"\n===== 處理預測長度: {pred_len} =====")
+        print(f"\n===== Handle prediction length: {pred_len} =====")
         
         # 載入天氣數據
-        print(f"載入天氣數據，序列長度={seq_len}，預測長度={pred_len}")
+        print(f"Load weather data, sequence length = {seq_len}, prediction length = {pred_len}")
         train_x, train_y, val_x, val_y, test_x, test_y, scaler = load_weather_data(
             seq_len=seq_len, pred_len=pred_len, features=features
         )
@@ -495,12 +495,12 @@ if __name__ == "__main__":
         # 獲取特徵維度
         input_dim = train_x.shape[2]
         
-        print(f"訓練數據形狀: {train_x.shape}, {train_y.shape}")
-        print(f"驗證數據形狀: {val_x.shape}, {val_y.shape}")
-        print(f"測試數據形狀: {test_x.shape}, {test_y.shape}")
+        print(f"Training data shape: {train_x.shape}, {train_y.shape}")
+        print(f"Validation data shape: {val_x.shape}, {val_y.shape}")
+        print(f"Test data shape: {test_x.shape}, {test_y.shape}")
         
         for seed in random_seeds:
-            print(f"\n----- 使用隨機種子: {seed} -----")
+            print(f"\n----- Use random seed: {seed} -----")
             
             # 創建和訓練MLP模型
             mlp_model = MLP(seq_len, pred_len, input_dim, hidden_dims=[128, 256, 128])
@@ -514,7 +514,7 @@ if __name__ == "__main__":
             setting = f"weather_{seq_len}_{pred_len}_seed{seed}"
             save_nn_results(mlp_preds, mlp_trues, setting, "MLP", seq_len, pred_len)
             
-            print(f"\n隨機種子 {seed} 的結果:")
+            print(f"\nResults for random seed {seed}:")
             print(f"MLP\t\tMAE: {mlp_metrics[0]:.4f}\tMSE: {mlp_metrics[1]:.4f}\tRMSE: {mlp_metrics[2]:.4f}\tCORR: {mlp_metrics[6]:.4f}")
 
-    print("\n所有實驗完成！")
+    print("\nAll experiments completed!")
