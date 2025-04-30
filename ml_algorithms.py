@@ -16,6 +16,25 @@ import lightgbm as lgbm
 # Add XGBoost with GPU support
 import xgboost as xgb
 import time  # 用於追蹤訓練進度
+import random  # 新增用於設定隨機種子
+
+# 設定全局的隨機種子，確保結果可復現
+def set_seed(seed):
+    """設置所有可能的隨機種子以確保實驗可復現"""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    # 設定Python內建的hash隨機性
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    # 設定NumPy的隨機性
+    np.random.seed(seed)
+    # 如果使用CUDA，則確保CUDA操作的確定性
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    print(f"設定全局隨機種子為: {seed}")
 
 
 def load_weather_data(root_path='./dataset/', data_path='weather.csv', 
@@ -265,24 +284,12 @@ def train_and_evaluate_rf(train_x, train_y, val_x, val_y, test_x, test_y,
 
 def train_and_evaluate_xgb(train_x, train_y, val_x, val_y, test_x, test_y, 
                           pred_len, features_per_step, n_estimators=100, 
-                          learning_rate=0.1, max_depth=6, show_progress=True):
+                          learning_rate=0.1, max_depth=6, show_progress=True, random_seed=42):
     """
     Train and evaluate XGBoost models with GPU acceleration
     """
     print(f"Starting XGBoost model training (n_estimators={n_estimators}, learning_rate={learning_rate}, max_depth={max_depth})...")
     start_time = time.time()
-    
-    # 檢查 GPU 是否可用
-    try:
-        import subprocess
-        nvidia_output = subprocess.check_output('nvidia-smi', shell=True)
-        print("NVIDIA GPU detected:")
-        print(nvidia_output.decode('utf-8').split('\n')[:5])  # 顯示前幾行資訊
-        gpu_available = True
-    except:
-        print("WARNING: NVIDIA GPU not detected or nvidia-smi command cannot be executed")
-        print("XGBoost may automatically downgrade to CPU mode")
-        gpu_available = False
 
     # Get total number of variables
     n_variables = train_y.shape[1] // pred_len
@@ -304,9 +311,7 @@ def train_and_evaluate_xgb(train_x, train_y, val_x, val_y, test_x, test_y,
                 n_estimators=n_estimators, 
                 learning_rate=learning_rate,
                 max_depth=max_depth, 
-                tree_method='gpu_hist',  # GPU 加速
-                predictor='gpu_predictor',  # GPU 預測
-                random_state=42
+                random_state=random_seed
             )
             model.fit(train_x, current_y)
             models.append(model)
@@ -345,7 +350,7 @@ def train_and_evaluate_xgb(train_x, train_y, val_x, val_y, test_x, test_y,
     return models, val_pred, test_pred, (val_mae, val_mse, val_rmse), (test_mae, test_mse, test_rmse)
 
 def train_and_evaluate_ridge(train_x, train_y, val_x, val_y, test_x, test_y, 
-                           pred_len, features_per_step, alpha=1.0, show_progress=True):
+                           pred_len, features_per_step, alpha=1.0, show_progress=True, random_seed=42):
     """
     Train and evaluate Ridge linear models (much faster than tree-based models)
     """
@@ -368,7 +373,7 @@ def train_and_evaluate_ridge(train_x, train_y, val_x, val_y, test_x, test_y,
             current_y = train_y[:, target_idx]
             
             # Create and train Ridge model
-            model = Ridge(alpha=alpha, random_state=42)
+            model = Ridge(alpha=alpha, random_state=random_seed)
             model.fit(train_x, current_y)
             models.append(model)
             
@@ -614,7 +619,7 @@ if __name__ == "__main__":
             ridge_models, ridge_val_pred, ridge_test_pred, ridge_val_metrics, ridge_test_metrics = train_and_evaluate_ridge(
                 train_x, train_y, val_x, val_y, test_x, test_y, 
                 pred_len=pred_len, features_per_step=features_per_step,
-                alpha=1.0, show_progress=True
+                alpha=1.0, show_progress=True, random_seed=random_seed
             )
 
             completed_models += pred_len * features_per_step
@@ -624,7 +629,7 @@ if __name__ == "__main__":
             xgb_models, xgb_val_pred, xgb_test_pred, xgb_val_metrics, xgb_test_metrics = train_and_evaluate_xgb(
                 train_x, train_y, val_x, val_y, test_x, test_y, 
                 pred_len=pred_len, features_per_step=features_per_step,
-                n_estimators=100, learning_rate=0.05, max_depth=6, show_progress=True
+                n_estimators=100, learning_rate=0.05, max_depth=6, show_progress=True, random_seed=random_seed
             )
             '''
             completed_models += pred_len * features_per_step
@@ -672,12 +677,15 @@ if __name__ == "__main__":
         # 為平均結果繪圖
         #best_xgb_idx = np.argmin([res['test_metrics'][0] for res in xgb_results])
         best_ridge_idx = np.argmin([res['test_metrics'][0] for res in ridge_results])
+        worst_ridge_idx = np.argmax([res['test_metrics'][0] for res in ridge_results])
         '''
         plot_predictions(test_y, xgb_results[best_xgb_idx]['test_pred'], 
                          title=f"Weather XGBoost (pred_len={pred_len}) - Best Results")
         '''
         plot_predictions(test_y, ridge_results[best_ridge_idx]['test_pred'], 
                          title=f"Weather Ridge (pred_len={pred_len}) - Best Results")
+        plot_predictions(test_y, ridge_results[worst_ridge_idx]['test_pred'],
+                         title=f"Weather Ridge (pred_len={pred_len}) - Worst Results")
     
     total_time = time.time() - main_start_time
     print(f"\n{'-'*50}")

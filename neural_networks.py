@@ -11,7 +11,16 @@ import matplotlib.pyplot as plt
 import warnings
 import random
 from utils.tools import EarlyStopping
+from ml_algorithms import set_seed  # 導入設置隨機種子的函數
 warnings.filterwarnings('ignore')
+
+# 確保完全相同的運行環境，提高結果復現性
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+# 設置環境變數防止多線程帶來的隨機性
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
 
 
 def load_weather_data(root_path='./dataset/', data_path='weather.csv', 
@@ -404,12 +413,7 @@ def train_and_evaluate_model(model, model_name, train_x, train_y, val_x, val_y, 
     print(f"Starting training {model_name} model...")
     
     # 設置隨機種子以確保可重複性
-    torch.manual_seed(random_seed)
-    random.seed(random_seed)
-    np.random.seed(random_seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(random_seed)
-        torch.cuda.manual_seed_all(random_seed)
+    set_seed(random_seed)
     
     # 將模型移至指定設備
     model = model.to(device)
