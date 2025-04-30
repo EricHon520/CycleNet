@@ -586,9 +586,16 @@ if __name__ == "__main__":
         best_seed = mlp_results[best_idx]['seed']
         best_preds = mlp_results[best_idx]['preds']
         best_trues = mlp_results[best_idx]['trues']
+
+        worst_idx = np.argmax([res['metrics'][0] for res in mlp_results])
+        worst_seed = mlp_results[worst_idx]['seed']
+        worst_preds = mlp_results[worst_idx]['preds']
+        worst_trues = mlp_results[worst_idx]['trues']
         
         # 繪製最佳模型結果
         plot_predictions(best_trues, best_preds, 
                         title=f"MLP Best Results (pred_len={pred_len}, seed={best_seed})")
+        plot_predictions(worst_trues, worst_preds,
+                        title=f"MLP Worst Results (pred_len={pred_len}, seed={worst_seed})")
 
     print("\nAll experiments completed!")
