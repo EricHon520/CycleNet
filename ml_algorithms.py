@@ -372,7 +372,7 @@ def train_and_evaluate_linear(train_x, train_y, val_x, val_y, test_x, test_y,
             models.append(model)
             
             completed += 1
-            if show_progress and completed % 100 == 0:  # 每 100 個模型顯示一次進度
+            if show_progress:  # 每 100 個模型顯示一次進度
                 elapsed = time.time() - start_time
                 eta = (elapsed / completed) * (total_models - completed) if completed > 0 else 0
                 print(f"Train linear model: {completed}/{total_models} [timestep {i+1}/{pred_len}, number of variables {j+1}/{n_variables}]")
@@ -608,22 +608,22 @@ if __name__ == "__main__":
         for random_seed in random_seed_list:
             print(f"\nProcess random seed: {random_seed}, prediction length: {pred_len}")
             print(f"Total progress: {completed_models}/{total_models} completed")
+
+            # Train and evaluate Linear Regression model
+            linear_models, linear_val_pred, linear_test_pred, linear_val_metrics, linear_test_metrics = train_and_evaluate_linear(
+                train_x, train_y, val_x, val_y, test_x, test_y, 
+                pred_len=pred_len, features_per_step=features_per_step,
+                show_progress=True, random_seed=random_seed
+            )
+
+            completed_models += pred_len * features_per_step
+            print(f"Total progress: {completed_models}/{total_models} completed")
             
             # Train and evaluate Ridge model (linear model - much faster)
             ridge_models, ridge_val_pred, ridge_test_pred, ridge_val_metrics, ridge_test_metrics = train_and_evaluate_ridge(
                 train_x, train_y, val_x, val_y, test_x, test_y, 
                 pred_len=pred_len, features_per_step=features_per_step,
                 alpha=1.0, show_progress=True, random_seed=random_seed
-            )
-
-            completed_models += pred_len * features_per_step
-            print(f"Total progress: {completed_models}/{total_models} completed")
-            
-            # Train and evaluate Linear Regression model
-            linear_models, linear_val_pred, linear_test_pred, linear_val_metrics, linear_test_metrics = train_and_evaluate_linear(
-                train_x, train_y, val_x, val_y, test_x, test_y, 
-                pred_len=pred_len, features_per_step=features_per_step,
-                show_progress=True, random_seed=random_seed
             )
             
             completed_models += pred_len * features_per_step
