@@ -4,7 +4,7 @@ import pandas as pd
 import torch
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import Ridge  # 新增 Ridge 回歸
+from sklearn.linear_model import Ridge, LinearRegression  # 新增 LinearRegression
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import matplotlib.pyplot as plt
@@ -13,8 +13,8 @@ warnings.filterwarnings('ignore')
 
 # Add LightGBM
 import lightgbm as lgbm
-# Add XGBoost with GPU support
-import xgboost as xgb
+# 移除 XGBoost
+# import xgboost as xgb
 import time  # 用於追蹤訓練進度
 import random  # 新增用於設定隨機種子
 
@@ -282,73 +282,6 @@ def train_and_evaluate_rf(train_x, train_y, val_x, val_y, test_x, test_y,
     
     return models, val_pred, test_pred, (val_mae, val_mse, val_rmse), (test_mae, test_mse, test_rmse)
 
-def train_and_evaluate_xgb(train_x, train_y, val_x, val_y, test_x, test_y, 
-                          pred_len, features_per_step, n_estimators=100, 
-                          learning_rate=0.1, max_depth=6, show_progress=True, random_seed=42):
-    """
-    Train and evaluate XGBoost models with GPU acceleration
-    """
-    print(f"Starting XGBoost model training (n_estimators={n_estimators}, learning_rate={learning_rate}, max_depth={max_depth})...")
-    start_time = time.time()
-
-    # Get total number of variables
-    n_variables = train_y.shape[1] // pred_len
-    total_models = pred_len * n_variables
-    
-    print(f"Need to train {total_models} XGBoost sub-models")
-    models = []
-    completed = 0
-    
-    # Create a XGBoost model for each output time step and variable
-    for i in range(pred_len):
-        for j in range(n_variables):
-            # Extract target value for current time step and feature
-            target_idx = i * n_variables + j
-            current_y = train_y[:, target_idx]
-            
-            # Create and train XGBoost model with GPU acceleration
-            model = xgb.XGBRegressor(
-                n_estimators=n_estimators, 
-                learning_rate=learning_rate,
-                max_depth=max_depth, 
-                random_state=random_seed
-            )
-            model.fit(train_x, current_y)
-            models.append(model)
-            
-            completed += 1
-            if show_progress:
-                elapsed = time.time() - start_time
-                eta = (elapsed / completed) * (total_models - completed) if completed > 0 else 0
-                print(f"Train XGBoost models: {completed}/{total_models} [timestep {i+1}/{pred_len}, number of variables {j+1}/{n_variables}]")
-                print(f"Elapsed time: {elapsed:.1f} seconds, estimated remaining time: {eta:.1f} seconds")
-    
-    # Predict on validation set
-    val_pred = np.zeros((val_x.shape[0], val_y.shape[1]))
-    for i in range(pred_len):
-        for j in range(n_variables):
-            target_idx = i * n_variables + j
-            val_pred[:, target_idx] = models[target_idx].predict(val_x)
-    
-    # Predict on test set
-    test_pred = np.zeros((test_x.shape[0], test_y.shape[1]))
-    for i in range(pred_len):
-        for j in range(n_variables):
-            target_idx = i * n_variables + j
-            test_pred[:, target_idx] = models[target_idx].predict(test_x)
-    
-    # Calculate evaluation metrics
-    val_mae, val_mse, val_rmse = evaluate_metrics(val_pred, val_y)
-    test_mae, test_mse, test_rmse = evaluate_metrics(test_pred, test_y)
-    
-    total_time = time.time() - start_time
-    print(f"XGBoost model training completed! Total time: {total_time:.2f} seconds")
-    print("XGBoost model evaluation results:")
-    print(f"Validation set - MAE: {val_mae:.4f}, RMSE: {val_rmse:.4f}")
-    print(f"Test set - MAE: {test_mae:.4f}, RMSE: {test_rmse:.4f}")
-    
-    return models, val_pred, test_pred, (val_mae, val_mse, val_rmse), (test_mae, test_mse, test_rmse)
-
 def train_and_evaluate_ridge(train_x, train_y, val_x, val_y, test_x, test_y, 
                            pred_len, features_per_step, alpha=1.0, show_progress=True, random_seed=42):
     """
@@ -405,6 +338,67 @@ def train_and_evaluate_ridge(train_x, train_y, val_x, val_y, test_x, test_y,
     total_time = time.time() - start_time
     print(f"Ridge model training completed! Total time: {total_time:.2f} seconds")
     print("Ridge model evaluation results:")
+    print(f"Validation set - MAE: {val_mae:.4f}, RMSE: {val_rmse:.4f}")
+    print(f"Test set - MAE: {test_mae:.4f}, RMSE: {test_rmse:.4f}")
+    
+    return models, val_pred, test_pred, (val_mae, val_mse, val_rmse), (test_mae, test_mse, test_rmse)
+
+def train_and_evaluate_linear(train_x, train_y, val_x, val_y, test_x, test_y, 
+                             pred_len, features_per_step, show_progress=True, random_seed=42):
+    """
+    訓練和評估線性回歸模型 (比 XGBoost 快很多倍)
+    """
+    print(f"Start linear regression model training...")
+    start_time = time.time()
+
+    # 獲取變量總數
+    n_variables = train_y.shape[1] // pred_len
+    total_models = pred_len * n_variables
+    
+    print(f"Need to train {total_models} linear regression sub-models")
+    models = []
+    completed = 0
+    
+    # 為每個輸出時間步長和變量創建一個線性回歸模型
+    for i in range(pred_len):
+        for j in range(n_variables):
+            # 提取當前時間步長和特徵的目標值
+            target_idx = i * n_variables + j
+            current_y = train_y[:, target_idx]
+            
+            # 創建並訓練線性回歸模型
+            model = LinearRegression()
+            model.fit(train_x, current_y)
+            models.append(model)
+            
+            completed += 1
+            if show_progress and completed % 100 == 0:  # 每 100 個模型顯示一次進度
+                elapsed = time.time() - start_time
+                eta = (elapsed / completed) * (total_models - completed) if completed > 0 else 0
+                print(f"Train linear model: {completed}/{total_models} [timestep {i+1}/{pred_len}, number of variables {j+1}/{n_variables}]")
+                print(f"Elapsed time: {elapsed:.1f} seconds, estimated remaining time: {eta:.1f} seconds")
+    
+    # 在驗證集上預測
+    val_pred = np.zeros((val_x.shape[0], val_y.shape[1]))
+    for i in range(pred_len):
+        for j in range(n_variables):
+            target_idx = i * n_variables + j
+            val_pred[:, target_idx] = models[target_idx].predict(val_x)
+    
+    # 在測試集上預測
+    test_pred = np.zeros((test_x.shape[0], test_y.shape[1]))
+    for i in range(pred_len):
+        for j in range(n_variables):
+            target_idx = i * n_variables + j
+            test_pred[:, target_idx] = models[target_idx].predict(test_x)
+    
+    # 計算評估指標
+    val_mae, val_mse, val_rmse = evaluate_metrics(val_pred, val_y)
+    test_mae, test_mse, test_rmse = evaluate_metrics(test_pred, test_y)
+    
+    total_time = time.time() - start_time
+    print(f"Linear regression model training is complete! Total time: {total_time:.2f} seconds")
+    print("Linear regression model evaluation results:")
     print(f"Validation set - MAE: {val_mae:.4f}, RMSE: {val_rmse:.4f}")
     print(f"Test set - MAE: {test_mae:.4f}, RMSE: {test_rmse:.4f}")
     
@@ -607,7 +601,7 @@ if __name__ == "__main__":
         print(f"Test data shape: {test_x.shape}, {test_y.shape}")
         
         # 存儲每個隨機種子的結果
-        xgb_results = []
+        linear_results = []
         ridge_results = []
         
         # 針對每個隨機種子運行模型
@@ -624,28 +618,27 @@ if __name__ == "__main__":
 
             completed_models += pred_len * features_per_step
             print(f"Total progress: {completed_models}/{total_models} completed")
-            '''
-            # Train and evaluate XGBoost model with GPU acceleration
-            xgb_models, xgb_val_pred, xgb_test_pred, xgb_val_metrics, xgb_test_metrics = train_and_evaluate_xgb(
+            
+            # Train and evaluate Linear Regression model
+            linear_models, linear_val_pred, linear_test_pred, linear_val_metrics, linear_test_metrics = train_and_evaluate_linear(
                 train_x, train_y, val_x, val_y, test_x, test_y, 
                 pred_len=pred_len, features_per_step=features_per_step,
-                n_estimators=100, learning_rate=0.05, max_depth=6, show_progress=True, random_seed=random_seed
+                show_progress=True, random_seed=random_seed
             )
-            '''
+            
             completed_models += pred_len * features_per_step
             elapsed = time.time() - main_start_time
             eta = (elapsed / completed_models) * (total_models - completed_models) if completed_models > 0 else 0
             print(f"Total progress: {completed_models}/{total_models} completed")
             print(f"Total time: {elapsed/60:.1f} minutes, estimated remaining time: {eta/60:.1f} minutes")
-            '''
+            
             # 儲存每個隨機種子的結果
-            xgb_results.append({
+            linear_results.append({
                 'seed': random_seed,
-                'val_metrics': xgb_val_metrics,
-                'test_metrics': xgb_test_metrics,
-                'test_pred': xgb_test_pred
+                'val_metrics': linear_val_metrics,
+                'test_metrics': linear_test_metrics,
+                'test_pred': linear_test_pred
             })
-            '''
             ridge_results.append({
                 'seed': random_seed,
                 'val_metrics': ridge_val_metrics,
@@ -655,33 +648,35 @@ if __name__ == "__main__":
             
             # 保存帶有隨機種子信息的結果
             setting = f"weather_{seq_len}_{pred_len}_seed{random_seed}"
-            #save_ml_results(xgb_test_pred, test_y, setting, "XGBoost", seq_len, pred_len)
+            save_ml_results(linear_test_pred, test_y, setting, "LinearRegression", seq_len, pred_len)
             save_ml_results(ridge_test_pred, test_y, setting, "Ridge", seq_len, pred_len)
         
         # 計算並打印平均結果
         print(f"\n{'-'*50}")
         print(f"Average results of prediction length {pred_len} under {len(random_seed_list)} seeds:")
-        '''
-        # XGBoost 平均結果
-        xgb_avg_mae = np.mean([res['test_metrics'][0] for res in xgb_results])
-        xgb_avg_rmse = np.mean([res['test_metrics'][2] for res in xgb_results])
-        '''
+        
+        # Linear Regression 平均結果
+        linear_avg_mae = np.mean([res['test_metrics'][0] for res in linear_results])
+        linear_avg_rmse = np.mean([res['test_metrics'][2] for res in linear_results])
+        
         # Ridge 平均結果
         ridge_avg_mae = np.mean([res['test_metrics'][0] for res in ridge_results])
         ridge_avg_rmse = np.mean([res['test_metrics'][2] for res in ridge_results])
         
         print("Model\t\tAverage MAE\t\tAverage RMSE")
-        #print(f"XGBoost\t\t{xgb_avg_mae:.4f}\t\t{xgb_avg_rmse:.4f}")
+        print(f"Linear Regression\t{linear_avg_mae:.4f}\t\t{linear_avg_rmse:.4f}")
         print(f"Ridge Regression\t{ridge_avg_mae:.4f}\t\t{ridge_avg_rmse:.4f}")
         
         # 為平均結果繪圖
-        #best_xgb_idx = np.argmin([res['test_metrics'][0] for res in xgb_results])
+        best_linear_idx = np.argmin([res['test_metrics'][0] for res in linear_results])
+        worst_linear_idx = np.argmax([res['test_metrics'][0] for res in linear_results])
         best_ridge_idx = np.argmin([res['test_metrics'][0] for res in ridge_results])
         worst_ridge_idx = np.argmax([res['test_metrics'][0] for res in ridge_results])
-        '''
-        plot_predictions(test_y, xgb_results[best_xgb_idx]['test_pred'], 
-                         title=f"Weather XGBoost (pred_len={pred_len}) - Best Results")
-        '''
+        
+        plot_predictions(test_y, linear_results[best_linear_idx]['test_pred'], 
+                         title=f"Weather Linear Regression (pred_len={pred_len}) - Best Results")
+        plot_predictions(test_y, linear_results[worst_linear_idx]['test_pred'],
+                         title=f"Weather Linear Regression (pred_len={pred_len}) - Worst Results")
         plot_predictions(test_y, ridge_results[best_ridge_idx]['test_pred'], 
                          title=f"Weather Ridge (pred_len={pred_len}) - Best Results")
         plot_predictions(test_y, ridge_results[worst_ridge_idx]['test_pred'],
