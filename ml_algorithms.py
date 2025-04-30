@@ -367,7 +367,7 @@ def train_and_evaluate_linear(train_x, train_y, val_x, val_y, test_x, test_y,
             current_y = train_y[:, target_idx]
             
             # 創建並訓練線性回歸模型
-            model = LinearRegression()
+            model = LinearRegression(random_state=random_seed)
             model.fit(train_x, current_y)
             models.append(model)
             
