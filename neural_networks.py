@@ -263,13 +263,16 @@ def plot_predictions(true_vals, pred_vals, step_idx=0, var_idx=0, n_points=100, 
 
 # 定義多層感知器 (MLP) 模型
 class MLP(nn.Module):
-    def __init__(self, seq_len, pred_len, input_dim, hidden_dims=[64, 128, 64]):
+    def __init__(self, seq_len, pred_len, input_dim, hidden_dims=[64, 128, 64], seed=None):
         super(MLP, self).__init__()
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.input_dim = input_dim
         self.flatten_dim = seq_len * input_dim
         
+        if seed is not None:
+            torch.manual_seed(seed)
+
         # 定義網絡層
         layers = []
         input_size = self.flatten_dim
@@ -547,7 +550,7 @@ if __name__ == "__main__":
             print(f"\n----- Use random seed: {seed} -----")
             
             # 創建和訓練MLP模型
-            mlp_model = MLP(seq_len, pred_len, input_dim, hidden_dims=[128, 256, 128])
+            mlp_model = MLP(seq_len, pred_len, input_dim, hidden_dims=[128, 256, 128], seed=seed)
             mlp_model, mlp_preds, mlp_trues, mlp_metrics = train_and_evaluate_model(
                 mlp_model, "MLP", train_x, train_y, val_x, val_y, test_x, test_y, 
                 batch_size=batch_size, epochs=train_epochs, learning_rate=learning_rate, 
