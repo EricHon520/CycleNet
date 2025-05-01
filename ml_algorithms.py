@@ -3,39 +3,33 @@ import numpy as np
 import pandas as pd
 import torch
 from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import Ridge, LinearRegression  # 新增 LinearRegression
-from sklearn.model_selection import KFold
+from sklearn.linear_model import Ridge, LinearRegression  
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
 
-# Add LightGBM
+
 import lightgbm as lgbm
-# 移除 XGBoost
-# import xgboost as xgb
-import time  # 用於追蹤訓練進度
-import random  # 新增用於設定隨機種子
+
+import time  
+import random  
 
 # 設定全局的隨機種子，確保結果可復現
 def set_seed(seed):
-    """設置所有可能的隨機種子以確保實驗可復現"""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-    # 設定Python內建的hash隨機性
+
     os.environ['PYTHONHASHSEED'] = str(seed)
-    # 設定NumPy的隨機性
+
     np.random.seed(seed)
-    # 如果使用CUDA，則確保CUDA操作的確定性
+
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    print(f"設定全局隨機種子為: {seed}")
-
 
 def load_weather_data(root_path='./dataset/', data_path='weather.csv', 
                    seq_len=96, pred_len=96, features='M'):
@@ -173,114 +167,6 @@ def evaluate_metrics_extended(pred, true):
     
     return mae, mse, rmse, mape, mspe, rse, corr
 
-def train_and_evaluate_lgbm(train_x, train_y, val_x, val_y, test_x, test_y, 
-                           pred_len, features_per_step, n_estimators=100, 
-                           learning_rate=0.1, max_depth=-1, show_progress=True):
-    """
-    Train and evaluate LightGBM models
-    """
-    print(f"Starting LightGBM model training (n_estimators={n_estimators}, learning_rate={learning_rate}, max_depth={max_depth})...")
-    
-    # Get total number of variables
-    n_variables = train_y.shape[1] // pred_len
-    total_models = pred_len * n_variables
-    models = []
-    
-    # Create a LightGBM model for each output time step and variable
-    for i in range(pred_len):
-        for j in range(n_variables):
-            if show_progress:
-                print(f"Training model {len(models) + 1}/{total_models}...")
-                
-            # Extract target value for current time step and feature
-            target_idx = i * n_variables + j
-            current_y = train_y[:, target_idx]
-            
-            # Create and train LightGBM model
-            model = lgbm.LGBMRegressor(n_estimators=n_estimators, 
-                                       learning_rate=learning_rate,
-                                       max_depth=max_depth, 
-                                       random_state=42)
-            model.fit(train_x, current_y)
-            models.append(model)
-    
-    # Predict on validation set
-    val_pred = np.zeros((val_x.shape[0], val_y.shape[1]))
-    for i in range(pred_len):
-        for j in range(n_variables):
-            target_idx = i * n_variables + j
-            val_pred[:, target_idx] = models[target_idx].predict(val_x)
-    
-    # Predict on test set
-    test_pred = np.zeros((test_x.shape[0], test_y.shape[1]))
-    for i in range(pred_len):
-        for j in range(n_variables):
-            target_idx = i * n_variables + j
-            test_pred[:, target_idx] = models[target_idx].predict(test_x)
-    
-    # Calculate evaluation metrics
-    val_mae, val_mse, val_rmse = evaluate_metrics(val_pred, val_y)
-    test_mae, test_mse, test_rmse = evaluate_metrics(test_pred, test_y)
-    
-    print("LightGBM model evaluation results:")
-    print(f"Validation set - MAE: {val_mae:.4f}, RMSE: {val_rmse:.4f}")
-    print(f"Test set - MAE: {test_mae:.4f}, RMSE: {test_rmse:.4f}")
-    
-    return models, val_pred, test_pred, (val_mae, val_mse, val_rmse), (test_mae, test_mse, test_rmse)
-
-def train_and_evaluate_rf(train_x, train_y, val_x, val_y, test_x, test_y, 
-                          pred_len, features_per_step, n_estimators=100, 
-                          max_depth=None, show_progress=True):
-    """
-    Train and evaluate Random Forest models
-    """
-    print(f"Starting Random Forest model training (n_estimators={n_estimators}, max_depth={max_depth})...")
-    
-    # Since RandomForest is a single-output model, we need to train a separate model for each output time step and feature
-    models = []
-    
-    # Get total number of variables
-    n_variables = train_y.shape[1] // pred_len
-    
-    total_models = pred_len * n_variables
-    
-    # Create a RandomForest model for each output time step and variable
-    for i in range(pred_len):
-        for j in range(n_variables):
-            if show_progress:
-                print(f"Training model {len(models) + 1}/{total_models}...")
-                
-            # Extract target value for current time step and feature
-            target_idx = i * n_variables + j
-            current_y = train_y[:, target_idx]
-            
-            model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, random_state=42)
-            model.fit(train_x, current_y)
-            models.append(model)
-    
-    # Predict on validation set
-    val_pred = np.zeros((val_x.shape[0], val_y.shape[1]))
-    for i in range(pred_len):
-        for j in range(n_variables):
-            target_idx = i * n_variables + j
-            val_pred[:, target_idx] = models[target_idx].predict(val_x)
-    
-    # Predict on test set
-    test_pred = np.zeros((test_x.shape[0], test_y.shape[1]))
-    for i in range(pred_len):
-        for j in range(n_variables):
-            target_idx = i * n_variables + j
-            test_pred[:, target_idx] = models[target_idx].predict(test_x)
-    
-    # Calculate evaluation metrics
-    val_mae, val_mse, val_rmse = evaluate_metrics(val_pred, val_y)
-    test_mae, test_mse, test_rmse = evaluate_metrics(test_pred, test_y)
-    
-    print("Random Forest model evaluation results:")
-    print(f"Validation set - MAE: {val_mae:.4f}, RMSE: {val_rmse:.4f}")
-    print(f"Test set - MAE: {test_mae:.4f}, RMSE: {test_rmse:.4f}")
-    
-    return models, val_pred, test_pred, (val_mae, val_mse, val_rmse), (test_mae, test_mse, test_rmse)
 
 def train_and_evaluate_ridge(train_x, train_y, val_x, val_y, test_x, test_y, 
                            pred_len, features_per_step, alpha=1.0, show_progress=True, random_seed=42):
@@ -343,11 +229,9 @@ def train_and_evaluate_ridge(train_x, train_y, val_x, val_y, test_x, test_y,
     
     return models, val_pred, test_pred, (val_mae, val_mse, val_rmse), (test_mae, test_mse, test_rmse)
 
+
 def train_and_evaluate_linear(train_x, train_y, val_x, val_y, test_x, test_y, 
                              pred_len, features_per_step, show_progress=True, random_seed=42):
-    """
-    訓練和評估線性回歸模型 (比 XGBoost 快很多倍)
-    """
     print(f"Start linear regression model training...")
     start_time = time.time()
 
@@ -358,41 +242,35 @@ def train_and_evaluate_linear(train_x, train_y, val_x, val_y, test_x, test_y,
     print(f"Need to train {total_models} linear regression sub-models")
     models = []
     completed = 0
-    
-    # 為每個輸出時間步長和變量創建一個線性回歸模型
+
     for i in range(pred_len):
         for j in range(n_variables):
-            # 提取當前時間步長和特徵的目標值
             target_idx = i * n_variables + j
             current_y = train_y[:, target_idx]
             
-            # 創建並訓練線性回歸模型
             model = LinearRegression(random_state=random_seed)
             model.fit(train_x, current_y)
             models.append(model)
             
             completed += 1
-            if show_progress:  # 每 100 個模型顯示一次進度
+            if show_progress:  
                 elapsed = time.time() - start_time
                 eta = (elapsed / completed) * (total_models - completed) if completed > 0 else 0
                 print(f"Train linear model: {completed}/{total_models} [timestep {i+1}/{pred_len}, number of variables {j+1}/{n_variables}]")
                 print(f"Elapsed time: {elapsed:.1f} seconds, estimated remaining time: {eta:.1f} seconds")
     
-    # 在驗證集上預測
     val_pred = np.zeros((val_x.shape[0], val_y.shape[1]))
     for i in range(pred_len):
         for j in range(n_variables):
             target_idx = i * n_variables + j
             val_pred[:, target_idx] = models[target_idx].predict(val_x)
     
-    # 在測試集上預測
     test_pred = np.zeros((test_x.shape[0], test_y.shape[1]))
     for i in range(pred_len):
         for j in range(n_variables):
             target_idx = i * n_variables + j
             test_pred[:, target_idx] = models[target_idx].predict(test_x)
     
-    # 計算評估指標
     val_mae, val_mse, val_rmse = evaluate_metrics(val_pred, val_y)
     test_mae, test_mse, test_rmse = evaluate_metrics(test_pred, test_y)
     
@@ -463,14 +341,6 @@ def visualize_predictions(pred, true, folder_path, seq_len, pred_len, samples=5)
     '''
 
 def plot_multivariate_performance(pred, true, folder_path):
-    """
-    Plot performance analysis charts for multivariate time series
-    
-    Parameters:
-    - pred: Predicted values [samples, time_steps, variables]
-    - true: True values [samples, time_steps, variables]
-    - folder_path: Directory to save charts
-    """
     if len(pred.shape) < 3 or len(true.shape) < 3:
         print("Multivariate data is required to plot multivariate performance charts")
         return
@@ -562,16 +432,13 @@ def save_ml_results(pred, true, setting, model_name, seq_len, pred_len):
 if __name__ == "__main__":
     # Parameter settings
     seq_len = 96
-    # 使用與 weather.sh 相同的預測長度設定
     pred_len_list = [96]
-    # 使用與 weather.sh 相同的隨機種子設定
     random_seed_list = [2024]
-    features = 'M'  # Use multivariate prediction
+    features = 'M' 
     
-    # 計算總訓練模型數量
     total_pred_len = sum(pred_len_list)
-    features_per_step = 21  # Weather dataset has 21 variables
-    total_models = total_pred_len * features_per_step * len(random_seed_list) * 1  # 2 types of models
+    features_per_step = 21  
+    total_models = total_pred_len * features_per_step * len(random_seed_list) * 1  
     
     print(f"=" * 80)
     print(f"A total of {total_models} models need to be trained")
@@ -581,7 +448,6 @@ if __name__ == "__main__":
     main_start_time = time.time()
     completed_models = 0
     
-    # 針對每個預測長度運行模型
     for pred_len in pred_len_list:
         print(f"\n{'-'*50}")
         print(f"Running for prediction length: {pred_len}")
@@ -600,11 +466,9 @@ if __name__ == "__main__":
         print(f"Validation data shape: {val_x.shape}, {val_y.shape}")
         print(f"Test data shape: {test_x.shape}, {test_y.shape}")
         
-        # 存儲每個隨機種子的結果
         linear_results = []
         ridge_results = []
         
-        # 針對每個隨機種子運行模型
         for random_seed in random_seed_list:
             print(f"\nProcess random seed: {random_seed}, prediction length: {pred_len}")
             print(f"Total progress: {completed_models}/{total_models} completed")
@@ -632,7 +496,6 @@ if __name__ == "__main__":
             print(f"Total progress: {completed_models}/{total_models} completed")
             print(f"Total time: {elapsed/60:.1f} minutes, estimated remaining time: {eta/60:.1f} minutes")
             
-            # 儲存每個隨機種子的結果
             linear_results.append({
                 'seed': random_seed,
                 'val_metrics': linear_val_metrics,
@@ -646,20 +509,16 @@ if __name__ == "__main__":
                 'test_pred': ridge_test_pred
             })
             
-            # 保存帶有隨機種子信息的結果
             setting = f"weather_{seq_len}_{pred_len}_seed{random_seed}"
             save_ml_results(linear_test_pred, test_y, setting, "LinearRegression", seq_len, pred_len)
             save_ml_results(ridge_test_pred, test_y, setting, "Ridge", seq_len, pred_len)
         
-        # 計算並打印平均結果
         print(f"\n{'-'*50}")
         print(f"Average results of prediction length {pred_len} under {len(random_seed_list)} seeds:")
         
-        # Linear Regression 平均結果
         linear_avg_mae = np.mean([res['test_metrics'][0] for res in linear_results])
         linear_avg_rmse = np.mean([res['test_metrics'][2] for res in linear_results])
         
-        # Ridge 平均結果
         ridge_avg_mae = np.mean([res['test_metrics'][0] for res in ridge_results])
         ridge_avg_rmse = np.mean([res['test_metrics'][2] for res in ridge_results])
         

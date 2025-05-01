@@ -11,51 +11,39 @@ import matplotlib.pyplot as plt
 import warnings
 import random
 from utils.tools import EarlyStopping
-from ml_algorithms import set_seed  # 導入設置隨機種子的函數
+from ml_algorithms import set_seed  
 warnings.filterwarnings('ignore')
 
-# 確保完全相同的運行環境，提高結果復現性
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-# 設置環境變數防止多線程帶來的隨機性
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 
 
 def load_weather_data(root_path='./dataset/', data_path='weather.csv', 
                    seq_len=96, pred_len=96, features='M'):
-    """
-    Load Weather dataset and prepare for neural network models
-    和ml_algorithms.py中的函數類似，但為神經網路模型準備張量數據
-    """
     df_raw = pd.read_csv(os.path.join(root_path, data_path))
-    
-    # 設置數據邊界 (按照原始代碼, 使用相同的訓練/驗證/測試分割)
-    # 天氣數據邊界設置 (70%/20%/10%)
+
     num_train = int(len(df_raw) * 0.7)
     num_test = int(len(df_raw) * 0.2)
     num_vali = len(df_raw) - num_train - num_test
     
     border1s = [0, num_train - seq_len, len(df_raw) - num_test - seq_len]
     border2s = [num_train, num_train + num_vali, len(df_raw)]
-    
-    # 選擇特徵列
+
     if features == 'M' or features == 'MS':
         cols_data = df_raw.columns[1:]
         df_data = df_raw[cols_data]
     else:
-        # 如果需要單變量預測, 使用OT作為預設目標變量
         target = 'OT'
         df_data = df_raw[[target]]
-    
-    # 標準化數據
+
     scaler = StandardScaler()
     train_data = df_data[border1s[0]:border2s[0]]
     scaler.fit(train_data.values)
     data = scaler.transform(df_data.values)
-    
-    # 提取時間戳
+
     df_stamp = df_raw[['date']][border1s[0]:border2s[2]]
     df_stamp['date'] = pd.to_datetime(df_stamp.date)
     df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)
@@ -63,13 +51,11 @@ def load_weather_data(root_path='./dataset/', data_path='weather.csv',
     df_stamp['weekday'] = df_stamp.date.apply(lambda row: row.weekday(), 1)
     df_stamp['hour'] = df_stamp.date.apply(lambda row: row.hour, 1)
     data_stamp = df_stamp.drop(columns=['date']).values
-    
-    # 為神經網路準備數據
+
     train_x, train_y = prepare_data_for_nn(data[border1s[0]:border2s[0]], seq_len, pred_len)
     val_x, val_y = prepare_data_for_nn(data[border1s[1]:border2s[1]], seq_len, pred_len)
     test_x, test_y = prepare_data_for_nn(data[border1s[2]:border2s[2]], seq_len, pred_len)
-    
-    # 轉換為PyTorch張量
+
     train_x = torch.FloatTensor(train_x)
     train_y = torch.FloatTensor(train_y)
     val_x = torch.FloatTensor(val_x)
@@ -81,9 +67,6 @@ def load_weather_data(root_path='./dataset/', data_path='weather.csv',
 
 
 def prepare_data_for_nn(data, seq_len, pred_len):
-    """
-    將數據準備為神經網路輸入的序列形式
-    """
     x_data = []
     y_data = []
     
@@ -98,31 +81,22 @@ def prepare_data_for_nn(data, seq_len, pred_len):
 
 
 def evaluate_metrics(pred, true):
-    """
-    計算評估指標: MAE, MSE, RMSE, MAPE, MSPE, RSE, CORR
-    """
-    # 確保一致的形狀 - 處理多變量情況
     pred = np.array(pred)
     true = np.array(true)
     
-    # 基本指標
     mae = np.mean(np.abs(pred - true))
     mse = np.mean((pred - true) ** 2)
     rmse = np.sqrt(mse)
     
-    # 進階指標
-    # 防止除以零
     mask = true != 0
     mape = np.mean(np.abs((true[mask] - pred[mask]) / true[mask]))
     mspe = np.mean(((true[mask] - pred[mask]) / true[mask]) ** 2)
-    
-    # 相對平方誤差
+
     mean_true = np.mean(true)
     numerator = np.sum((true - pred) ** 2)
     denominator = np.sum((true - mean_true) ** 2)
     rse = numerator / denominator if denominator != 0 else np.inf
-    
-    # 相關係數
+
     pred_flat = pred.reshape(-1)
     true_flat = true.reshape(-1)
     corr = np.corrcoef(pred_flat, true_flat)[0, 1] if len(pred_flat) > 1 else 0
@@ -131,49 +105,35 @@ def evaluate_metrics(pred, true):
 
 
 def save_nn_results(pred, true, setting, model_name, seq_len, pred_len):
-    """
-    保存結果，格式與深度學習模型兼容
-    """
-    # 創建結果目錄
     folder_path = f'./results/{setting}_{model_name}/'
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
     
-    # 計算評估指標
     mae, mse, rmse, mape, mspe, rse, corr = evaluate_metrics(pred, true)
-    
-    # 打印並保存主要指標
+
     print(f'{model_name} - mse:{mse:.4f}, mae:{mae:.4f}')
     with open("result.txt", 'a') as f:
         f.write(f"{setting}_{model_name}  \n")
         f.write(f'mse:{mse:.4f}, mae:{mae:.4f}, rmse:{rmse:.4f}, mape:{mape:.4f}, mspe:{mspe:.4f}, rse:{rse:.4f}, corr:{corr:.4f}')
         f.write('\n\n')
-    
-    # 保存評估指標
+
     np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe, rse, corr]))
     np.save(folder_path + 'pred.npy', pred)
     np.save(folder_path + 'true.npy', true)
     
-    # 視覺化樣本
     visualize_predictions(pred, true, folder_path, seq_len, pred_len)
     
     return mae, mse, rmse, mape, mspe, rse, corr
 
 
 def visualize_predictions(pred, true, folder_path, seq_len, pred_len, samples=5):
-    """
-    繪製預測值和真實值的比較圖
-    """
-    # 選擇樣本數量
     n_samples = min(samples, len(pred))
     
-    # 取得變量數量
     if len(pred.shape) > 2:
         n_vars = pred.shape[2]
-        # 使用第一個變量進行可視化
+
         target_var = 0
         
-        # 為每個選擇的樣本繪製圖表
         for i in range(n_samples):
             plt.figure(figsize=(12, 6))
             plt.plot(true[i, :, target_var], label='true_value', color='blue', linestyle='-')
@@ -187,7 +147,6 @@ def visualize_predictions(pred, true, folder_path, seq_len, pred_len, samples=5)
                       dpi=300, bbox_inches='tight')
             plt.close()
     else:
-        # 單變量數據
         for i in range(n_samples):
             plt.figure(figsize=(12, 6))
             plt.plot(true[i], label='true_value', color='blue', linestyle='-')
@@ -221,33 +180,14 @@ def visualize_predictions(pred, true, folder_path, seq_len, pred_len, samples=5)
 
 
 def plot_predictions(true_vals, pred_vals, step_idx=0, var_idx=0, n_points=100, title="Predictions vs True Values"):
-    """
-    繪製預測值與真實值的比較圖
-    
-    Parameters:
-    -----------
-    true_vals : numpy.ndarray
-        真實值數據
-    pred_vals : numpy.ndarray
-        預測值數據
-    step_idx : int
-        要繪製的時間步索引
-    var_idx : int
-        要繪製的變量索引
-    n_points : int
-        要顯示的數據點數量
-    title : str
-        圖表標題
-    """
-    # 確定數據維度
-    if len(true_vals.shape) > 2:  # 形狀為 [batch, seq_len, n_vars]
+
+    if len(true_vals.shape) > 2:
         n_variables = true_vals.shape[2]
-        # 選取特定的時間步和變量
+
         true_to_plot = true_vals[:n_points, step_idx, var_idx]
         pred_to_plot = pred_vals[:n_points, step_idx, var_idx]
-    else:  # 形狀為 [batch, seq_len*n_vars]
-        # 假設這種情況下，數據已經被平坦化為 [batch, seq_len*n_vars] 的形式
-        n_variables = true_vals.shape[1] // pred_len  # pred_len 需要從函數外部獲取
+    else:  
+        n_variables = true_vals.shape[1] // pred_len  
         idx = step_idx * n_variables + var_idx
         true_to_plot = true_vals[:n_points, idx]
         pred_to_plot = pred_vals[:n_points, idx]
@@ -260,8 +200,6 @@ def plot_predictions(true_vals, pred_vals, step_idx=0, var_idx=0, n_points=100, 
     plt.savefig(f"{title.replace(' ', '_')}.png", dpi=300)
     plt.close()
 
-
-# 定義多層感知器 (MLP) 模型
 class MLP(nn.Module):
     def __init__(self, seq_len, pred_len, input_dim, hidden_dims=[64, 128, 64], seed=None):
         super(MLP, self).__init__()
@@ -273,194 +211,65 @@ class MLP(nn.Module):
         if seed is not None:
             torch.manual_seed(seed)
 
-        # 定義網絡層
         layers = []
         input_size = self.flatten_dim
         
-        # 添加隱藏層
         for hidden_dim in hidden_dims:
             layers.append(nn.Linear(input_size, hidden_dim))
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(0.1))
             input_size = hidden_dim
             
-        # 輸出層
         self.output_layer = nn.Linear(input_size, pred_len * input_dim)
         
-        # 建立模型
         self.hidden_layers = nn.Sequential(*layers)
         
     def forward(self, x):
         batch_size = x.shape[0]
-        # 展平輸入序列
         x = x.reshape(batch_size, -1)
-        # 通過隱藏層
         x = self.hidden_layers(x)
-        # 輸出層
         x = self.output_layer(x)
-        # 重塑為序列形式
         return x.reshape(batch_size, self.pred_len, self.input_dim)
-
-
-# 定義卷積神經網絡 (CNN) 模型
-class CNNModel(nn.Module):
-    def __init__(self, seq_len, pred_len, input_dim, kernel_size=3):
-        super(CNNModel, self).__init__()
-        self.seq_len = seq_len
-        self.pred_len = pred_len
-        self.input_dim = input_dim
-        
-        # 卷積層
-        self.conv1 = nn.Conv1d(input_dim, 32, kernel_size, padding='same')
-        self.conv2 = nn.Conv1d(32, 64, kernel_size, padding='same')
-        self.conv3 = nn.Conv1d(64, 128, kernel_size, padding='same')
-        
-        # 池化層
-        self.pool = nn.MaxPool1d(2)
-        
-        # 計算全連接層輸入大小
-        self.flatten_size = 128 * (seq_len // 4)
-        
-        # 全連接層
-        self.fc1 = nn.Linear(self.flatten_size, 256)
-        self.fc2 = nn.Linear(256, pred_len * input_dim)
-        
-        # 激活函數和dropout
-        self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(0.1)
-        
-    def forward(self, x):
-        batch_size = x.shape[0]
-        
-        # 調整維度順序為 [batch, channels, seq_len]
-        x = x.permute(0, 2, 1)
-        
-        # 卷積塊 1
-        x = self.relu(self.conv1(x))
-        x = self.pool(x)
-        
-        # 卷積塊 2
-        x = self.relu(self.conv2(x))
-        x = self.pool(x)
-        
-        # 卷積塊 3
-        x = self.relu(self.conv3(x))
-        
-        # 展平
-        x = x.reshape(batch_size, -1)
-        
-        # 全連接層
-        x = self.relu(self.fc1(x))
-        x = self.dropout(x)
-        x = self.fc2(x)
-        
-        # 重塑為預測序列 [batch, pred_len, input_dim]
-        return x.reshape(batch_size, self.pred_len, self.input_dim)
-
-
-# 定義循環神經網路 (RNN) 模型
-class RNNModel(nn.Module):
-    def __init__(self, seq_len, pred_len, input_dim, hidden_dim=64, num_layers=2, rnn_type='lstm'):
-        super(RNNModel, self).__init__()
-        self.seq_len = seq_len
-        self.pred_len = pred_len
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
-        
-        # 選擇RNN類型
-        if rnn_type == 'lstm':
-            self.rnn = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
-        elif rnn_type == 'gru':
-            self.rnn = nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True)
-        else:
-            self.rnn = nn.RNN(input_dim, hidden_dim, num_layers, batch_first=True)
-        
-        # 輸出層
-        self.fc = nn.Linear(hidden_dim, input_dim)
-        
-    def forward(self, x):
-        batch_size = x.shape[0]
-        
-        # 通過RNN層
-        outputs, _ = self.rnn(x)
-        
-        # 只取最後一個時間步的輸出作為解碼器的初始輸入
-        decoder_input = outputs[:, -1:, :]
-        
-        # 自回歸預測
-        predictions = []
-        current_input = decoder_input
-        
-        for _ in range(self.pred_len):
-            # 通過一次時間步
-            current_output, _ = self.rnn(current_input, None)
-            # 應用輸出層得到預測
-            current_pred = self.fc(current_output)
-            # 添加到預測結果
-            predictions.append(current_pred)
-            # 更新當前輸入
-            current_input = current_pred
-        
-        # 連接所有預測結果 [batch, pred_len, input_dim]
-        predictions = torch.cat(predictions, dim=1)
-        
-        return predictions
-
 
 def train_and_evaluate_model(model, model_name, train_x, train_y, val_x, val_y, test_x, test_y, 
                             batch_size=256, epochs=30, learning_rate=0.005, patience=5, device='cpu', random_seed=2024):
-    """
-    訓練和評估神經網絡模型
-    """
+
     print(f"Starting training {model_name} model...")
     
-    # 設置隨機種子以確保可重複性
     set_seed(random_seed)
     
-    # 將模型移至指定設備
     model = model.to(device)
     
-    # 準備數據載入器
     train_dataset = TensorDataset(train_x.to(device), train_y.to(device))
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     
     val_dataset = TensorDataset(val_x.to(device), val_y.to(device))
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     
-    # 損失函數和優化器
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
-    # 創建檢查點保存路徑
     checkpoint_path = f'./checkpoints/{model_name}_seq{train_x.shape[1]}_pred{train_y.shape[1]}_seed{random_seed}'
     
-    # 使用已有的早停機制
     early_stopping = EarlyStopping(patience=patience, verbose=True)
     
-    # 訓練迴圈
     for epoch in range(epochs):
-        # 訓練階段
         model.train()
         train_loss = 0.0
         
         for inputs, targets in train_loader:
-            # 清除梯度
             optimizer.zero_grad()
             
-            # 前向傳播
             outputs = model(inputs)
             loss = criterion(outputs, targets)
             
-            # 反向傳播和優化
             loss.backward()
             optimizer.step()
             
             train_loss += loss.item()
             
         train_loss /= len(train_loader)
-        
-        # 驗證階段
+
         model.eval()
         val_loss = 0.0
         
@@ -471,7 +280,6 @@ def train_and_evaluate_model(model, model_name, train_x, train_y, val_x, val_y, 
                 
         val_loss /= len(val_loader)
         
-        # 打印訓練進度
         print(f'Epoch {epoch+1}/{epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
         
         # 使用 EarlyStopping
