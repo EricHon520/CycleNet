@@ -1,0 +1,9 @@
+weather_96_96_seed2024_MLP  
+mse:0.2166, mae:0.3067, rmse:0.4654, mape:5.8711, mspe:2100647.2500, rse:0.3761, corr:0.8011
+
+weather_96_96_seed2024_LSTM  
+mse:0.2788, mae:0.3579, rmse:0.5280, mape:7.9880, mspe:5369855.0000, rse:0.4842, corr:0.7325
+
+weather_96_96_seed2024_GRU  
+mse:0.2318, mae:0.3246, rmse:0.4815, mape:7.0084, mspe:2757974.2500, rse:0.4026, corr:0.7853
+

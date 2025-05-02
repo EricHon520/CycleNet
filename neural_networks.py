@@ -112,7 +112,7 @@ def save_nn_results(pred, true, setting, model_name, seq_len, pred_len):
     mae, mse, rmse, mape, mspe, rse, corr = evaluate_metrics(pred, true)
 
     print(f'{model_name} - mse:{mse:.4f}, mae:{mae:.4f}')
-    with open("result.txt", 'a') as f:
+    with open("MLP_LSTM_GRU_result.txt", 'a') as f:
         f.write(f"{setting}_{model_name}  \n")
         f.write(f'mse:{mse:.4f}, mae:{mae:.4f}, rmse:{rmse:.4f}, mape:{mape:.4f}, mspe:{mspe:.4f}, rse:{rse:.4f}, corr:{corr:.4f}')
         f.write('\n\n')
@@ -322,8 +322,6 @@ def train_and_evaluate_model(model, model_name, train_x, train_y, val_x, val_y, 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
     checkpoint_path = f'./checkpoints/{model_name}_seq{train_x.shape[1]}_pred{train_y.shape[1]}_seed{random_seed}'
-    if not os.path.exists(checkpoint_path):
-        os.makedirs(checkpoint_path)
     
     early_stopping = EarlyStopping(patience=patience, verbose=True)
     
