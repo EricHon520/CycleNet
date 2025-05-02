@@ -528,18 +528,12 @@ if __name__ == "__main__":
         
         # 為平均結果繪圖
         best_linear_idx = np.argmin([res['test_metrics'][0] for res in linear_results])
-        worst_linear_idx = np.argmax([res['test_metrics'][0] for res in linear_results])
         best_ridge_idx = np.argmin([res['test_metrics'][0] for res in ridge_results])
-        worst_ridge_idx = np.argmax([res['test_metrics'][0] for res in ridge_results])
         
         plot_predictions(test_y, linear_results[best_linear_idx]['test_pred'], 
                          title=f"Weather Linear Regression (pred_len={pred_len}) - Best Results")
-        plot_predictions(test_y, linear_results[worst_linear_idx]['test_pred'],
-                         title=f"Weather Linear Regression (pred_len={pred_len}) - Worst Results")
         plot_predictions(test_y, ridge_results[best_ridge_idx]['test_pred'], 
                          title=f"Weather Ridge (pred_len={pred_len}) - Best Results")
-        plot_predictions(test_y, ridge_results[worst_ridge_idx]['test_pred'],
-                         title=f"Weather Ridge (pred_len={pred_len}) - Worst Results")
     
     total_time = time.time() - main_start_time
     print(f"\n{'-'*50}")

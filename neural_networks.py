@@ -105,7 +105,7 @@ def evaluate_metrics(pred, true):
 
 
 def save_nn_results(pred, true, setting, model_name, seq_len, pred_len):
-    folder_path = f'./results/{setting}_{model_name}/'
+    folder_path = f'./MLP_LSTM_GRU_results/{setting}_{model_name}/'
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
     
@@ -231,6 +231,78 @@ class MLP(nn.Module):
         x = self.output_layer(x)
         return x.reshape(batch_size, self.pred_len, self.input_dim)
 
+class LSTM(nn.Module):
+    def __init__(self, seq_len, pred_len, input_dim, hidden_dim=128, num_layers=2, dropout=0.1, seed=None):
+        super(LSTM, self).__init__()
+        self.seq_len = seq_len
+        self.pred_len = pred_len
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        
+        if seed is not None:
+            torch.manual_seed(seed)
+        
+        self.lstm = nn.LSTM(
+            input_size=input_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0
+        )
+        
+        self.fc = nn.Linear(hidden_dim, input_dim)
+        
+    def forward(self, x):
+        batch_size = x.shape[0]
+        
+        # LSTM層
+        output, (h_n, c_n) = self.lstm(x)
+        
+        # 使用最後一個時間步的隱藏狀態來預測未來
+        h_out = h_n[-1].view(batch_size, 1, self.hidden_dim).repeat(1, self.pred_len, 1)
+        
+        # 全連接層
+        out = self.fc(h_out)
+        
+        return out
+
+class GRU(nn.Module):
+    def __init__(self, seq_len, pred_len, input_dim, hidden_dim=128, num_layers=2, dropout=0.1, seed=None):
+        super(GRU, self).__init__()
+        self.seq_len = seq_len
+        self.pred_len = pred_len
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        
+        if seed is not None:
+            torch.manual_seed(seed)
+        
+        self.gru = nn.GRU(
+            input_size=input_dim,
+            hidden_size=hidden_dim,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0
+        )
+        
+        self.fc = nn.Linear(hidden_dim, input_dim)
+        
+    def forward(self, x):
+        batch_size = x.shape[0]
+        
+        # GRU層
+        output, h_n = self.gru(x)
+        
+        # 使用最後一個時間步的隱藏狀態來預測未來
+        h_out = h_n[-1].view(batch_size, 1, self.hidden_dim).repeat(1, self.pred_len, 1)
+        
+        # 全連接層
+        out = self.fc(h_out)
+        
+        return out
+
 def train_and_evaluate_model(model, model_name, train_x, train_y, val_x, val_y, test_x, test_y, 
                             batch_size=256, epochs=30, learning_rate=0.005, patience=5, device='cpu', random_seed=2024):
 
@@ -322,33 +394,30 @@ def train_and_evaluate_model(model, model_name, train_x, train_y, val_x, val_y, 
 
 
 if __name__ == "__main__":
-    # 參數設置 - 與 weather.sh 保持一致
     seq_len = 96
-    pred_lengths = [96]  # 與 weather.sh 保持一致的預測長度
-    random_seeds = [2024]  # 與 weather.sh 保持一致的隨機種子
-    features = 'M'  # 使用多變量預測
+    pred_lengths = [96]  
+    random_seeds = [2024]  
+    features = 'M'  
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f"Device used: {device}")
-    batch_size = 256  # 與 weather.sh 一致
-    learning_rate = 0.005  # 與 weather.sh 一致
-    train_epochs = 30  # 與 weather.sh 一致
-    patience = 5  # 與 weather.sh 一致
+    batch_size = 256  
+    learning_rate = 0.005 
+    train_epochs = 30  
+    patience = 5  
     
-    # 對每個預測長度和隨機種子組合進行訓練和評估
     for pred_len in pred_lengths:
         print(f"\n===== Handle prediction length: {pred_len} =====")
         
-        # 載入天氣數據
         print(f"Load weather data, sequence length = {seq_len}, prediction length = {pred_len}")
         train_x, train_y, val_x, val_y, test_x, test_y, scaler = load_weather_data(
             seq_len=seq_len, pred_len=pred_len, features=features
         )
         
-        # 獲取特徵維度
         input_dim = train_x.shape[2]
 
-        # 儲存不同種子的實驗結果
         mlp_results = []
+        lstm_results = []
+        gru_results = []
         
         print(f"Training data shape: {train_x.shape}, {train_y.shape}")
         print(f"Validation data shape: {val_x.shape}, {val_y.shape}")
@@ -357,7 +426,6 @@ if __name__ == "__main__":
         for seed in random_seeds:
             print(f"\n----- Use random seed: {seed} -----")
             
-            # 創建和訓練MLP模型
             mlp_model = MLP(seq_len, pred_len, input_dim, hidden_dims=[128, 256, 128], seed=seed)
             mlp_model, mlp_preds, mlp_trues, mlp_metrics = train_and_evaluate_model(
                 mlp_model, "MLP", train_x, train_y, val_x, val_y, test_x, test_y, 
@@ -365,11 +433,25 @@ if __name__ == "__main__":
                 patience=patience, device=device, random_seed=seed
             )
             
-            # 保存結果
+            lstm_model = LSTM(seq_len, pred_len, input_dim, hidden_dim=128, num_layers=2, seed=seed)
+            lstm_model, lstm_preds, lstm_trues, lstm_metrics = train_and_evaluate_model(
+                lstm_model, "LSTM", train_x, train_y, val_x, val_y, test_x, test_y, 
+                batch_size=batch_size, epochs=train_epochs, learning_rate=learning_rate, 
+                patience=patience, device=device, random_seed=seed
+            )
+            
+            gru_model = GRU(seq_len, pred_len, input_dim, hidden_dim=128, num_layers=2, seed=seed)
+            gru_model, gru_preds, gru_trues, gru_metrics = train_and_evaluate_model(
+                gru_model, "GRU", train_x, train_y, val_x, val_y, test_x, test_y, 
+                batch_size=batch_size, epochs=train_epochs, learning_rate=learning_rate, 
+                patience=patience, device=device, random_seed=seed
+            )
+            
             setting = f"weather_{seq_len}_{pred_len}_seed{seed}"
             save_nn_results(mlp_preds, mlp_trues, setting, "MLP", seq_len, pred_len)
+            save_nn_results(lstm_preds, lstm_trues, setting, "LSTM", seq_len, pred_len)
+            save_nn_results(gru_preds, gru_trues, setting, "GRU", seq_len, pred_len)
 
-            # 收集結果到列表
             mlp_results.append({
                 'seed': seed,
                 'metrics': mlp_metrics,
@@ -377,33 +459,69 @@ if __name__ == "__main__":
                 'trues': mlp_trues
             })
             
+            lstm_results.append({
+                'seed': seed,
+                'metrics': lstm_metrics,
+                'preds': lstm_preds,
+                'trues': lstm_trues
+            })
+            
+            gru_results.append({
+                'seed': seed,
+                'metrics': gru_metrics,
+                'preds': gru_preds,
+                'trues': gru_trues
+            })
+            
             print(f"\nResults for random seed {seed}:")
             print(f"MLP\t\tMAE: {mlp_metrics[0]:.4f}\tMSE: {mlp_metrics[1]:.4f}\tRMSE: {mlp_metrics[2]:.4f}\tCORR: {mlp_metrics[6]:.4f}")
+            print(f"LSTM\t\tMAE: {lstm_metrics[0]:.4f}\tMSE: {lstm_metrics[1]:.4f}\tRMSE: {lstm_metrics[2]:.4f}\tCORR: {lstm_metrics[6]:.4f}")
+            print(f"GRU\t\tMAE: {gru_metrics[0]:.4f}\tMSE: {gru_metrics[1]:.4f}\tRMSE: {gru_metrics[2]:.4f}\tCORR: {gru_metrics[6]:.4f}")
         
-        # 計算並顯示平均結果
         print(f"\n{'-'*50}")
         print(f"Average results across {len(random_seeds)} seeds:")
-        avg_mae = np.mean([res['metrics'][0] for res in mlp_results])
-        avg_mse = np.mean([res['metrics'][1] for res in mlp_results])
-        avg_rmse = np.mean([res['metrics'][2] for res in mlp_results])
-        avg_corr = np.mean([res['metrics'][6] for res in mlp_results])
-        print(f"MLP\t\tMAE: {avg_mae:.4f}\tMSE: {avg_mse:.4f}\tRMSE: {avg_rmse:.4f}\tCORR: {avg_corr:.4f}")
         
-        # 找出表現最佳的模型並繪製
-        best_idx = np.argmin([res['metrics'][0] for res in mlp_results])
-        best_seed = mlp_results[best_idx]['seed']
-        best_preds = mlp_results[best_idx]['preds']
-        best_trues = mlp_results[best_idx]['trues']
-
-        worst_idx = np.argmax([res['metrics'][0] for res in mlp_results])
-        worst_seed = mlp_results[worst_idx]['seed']
-        worst_preds = mlp_results[worst_idx]['preds']
-        worst_trues = mlp_results[worst_idx]['trues']
+        avg_mlp_mae = np.mean([res['metrics'][0] for res in mlp_results])
+        avg_mlp_mse = np.mean([res['metrics'][1] for res in mlp_results])
+        avg_mlp_rmse = np.mean([res['metrics'][2] for res in mlp_results])
+        avg_mlp_corr = np.mean([res['metrics'][6] for res in mlp_results])
         
-        # 繪製最佳模型結果
-        plot_predictions(best_trues, best_preds, 
-                        title=f"MLP Best Results (pred_len={pred_len}, seed={best_seed})")
-        plot_predictions(worst_trues, worst_preds,
-                        title=f"MLP Worst Results (pred_len={pred_len}, seed={worst_seed})")
+        avg_lstm_mae = np.mean([res['metrics'][0] for res in lstm_results])
+        avg_lstm_mse = np.mean([res['metrics'][1] for res in lstm_results])
+        avg_lstm_rmse = np.mean([res['metrics'][2] for res in lstm_results])
+        avg_lstm_corr = np.mean([res['metrics'][6] for res in lstm_results])
+        
+        avg_gru_mae = np.mean([res['metrics'][0] for res in gru_results])
+        avg_gru_mse = np.mean([res['metrics'][1] for res in gru_results])
+        avg_gru_rmse = np.mean([res['metrics'][2] for res in gru_results])
+        avg_gru_corr = np.mean([res['metrics'][6] for res in gru_results])
+        
+        print(f"MLP\t\tMAE: {avg_mlp_mae:.4f}\tMSE: {avg_mlp_mse:.4f}\tRMSE: {avg_mlp_rmse:.4f}\tCORR: {avg_mlp_corr:.4f}")
+        print(f"LSTM\t\tMAE: {avg_lstm_mae:.4f}\tMSE: {avg_lstm_mse:.4f}\tRMSE: {avg_lstm_rmse:.4f}\tCORR: {avg_lstm_corr:.4f}")
+        print(f"GRU\t\tMAE: {avg_gru_mae:.4f}\tMSE: {avg_gru_mse:.4f}\tRMSE: {avg_gru_rmse:.4f}\tCORR: {avg_gru_corr:.4f}")
+        
+        mlp_best_idx = np.argmin([res['metrics'][0] for res in mlp_results])
+        mlp_best_seed = mlp_results[mlp_best_idx]['seed']
+        mlp_best_preds = mlp_results[mlp_best_idx]['preds']
+        mlp_best_trues = mlp_results[mlp_best_idx]['trues']
+        
+        lstm_best_idx = np.argmin([res['metrics'][0] for res in lstm_results])
+        lstm_best_seed = lstm_results[lstm_best_idx]['seed']
+        lstm_best_preds = lstm_results[lstm_best_idx]['preds']
+        lstm_best_trues = lstm_results[lstm_best_idx]['trues']
+        
+        gru_best_idx = np.argmin([res['metrics'][0] for res in gru_results])
+        gru_best_seed = gru_results[gru_best_idx]['seed']
+        gru_best_preds = gru_results[gru_best_idx]['preds']
+        gru_best_trues = gru_results[gru_best_idx]['trues']
+        
+        plot_predictions(mlp_best_trues, mlp_best_preds, 
+                        title=f"MLP Best Results (pred_len={pred_len}, seed={mlp_best_seed})")
+                        
+        plot_predictions(lstm_best_trues, lstm_best_preds, 
+                        title=f"LSTM Best Results (pred_len={pred_len}, seed={lstm_best_seed})")
+                        
+        plot_predictions(gru_best_trues, gru_best_preds, 
+                        title=f"GRU Best Results (pred_len={pred_len}, seed={gru_best_seed})")
 
     print("\nAll experiments completed!")
