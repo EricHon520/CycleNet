@@ -322,6 +322,8 @@ def train_and_evaluate_model(model, model_name, train_x, train_y, val_x, val_y, 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
     checkpoint_path = f'./checkpoints/{model_name}_seq{train_x.shape[1]}_pred{train_y.shape[1]}_seed{random_seed}'
+    if not os.path.exists(checkpoint_path):
+        os.makedirs(checkpoint_path)
     
     early_stopping = EarlyStopping(patience=patience, verbose=True)
     
